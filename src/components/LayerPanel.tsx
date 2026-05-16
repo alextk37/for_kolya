@@ -296,14 +296,44 @@ export function LayerPanel({
                   value={selectedLayer.fontFamily}
                   onChange={(e) => onUpdateLayer(selectedLayer.id, { fontFamily: e.target.value })}
                 >
-                  <option value="Arial">Arial</option>
-                  <option value="Helvetica">Helvetica</option>
-                  <option value="Times New Roman">Times New Roman</option>
-                  <option value="Georgia">Georgia</option>
-                  <option value="Courier New">Courier New</option>
-                  <option value="Verdana">Verdana</option>
-                  <option value="Trebuchet MS">Trebuchet MS</option>
-                  <option value="Impact">Impact</option>
+                  <optgroup label="── Современные sans-serif ──">
+                    <option value="Inter">Inter</option>
+                    <option value="Roboto">Roboto</option>
+                    <option value="Open Sans">Open Sans</option>
+                    <option value="Montserrat">Montserrat</option>
+                    <option value="Lato">Lato</option>
+                    <option value="Nunito">Nunito</option>
+                    <option value="Ubuntu">Ubuntu</option>
+                    <option value="Exo 2">Exo 2</option>
+                    <option value="Raleway">Raleway</option>
+                  </optgroup>
+                  <optgroup label="── Заголовочные / Display ──">
+                    <option value="Oswald">Oswald</option>
+                    <option value="Bebas Neue">Bebas Neue</option>
+                    <option value="Impact">Impact</option>
+                  </optgroup>
+                  <optgroup label="── Декоративные ──">
+                    <option value="Pacifico">Pacifico</option>
+                    <option value="Lobster">Lobster</option>
+                    <option value="Playfair Display">Playfair Display</option>
+                  </optgroup>
+                  <optgroup label="── Serif ──">
+                    <option value="PT Serif">PT Serif</option>
+                    <option value="Merriweather">Merriweather</option>
+                    <option value="Lora">Lora</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                  </optgroup>
+                  <optgroup label="── Системные sans-serif ──">
+                    <option value="PT Sans">PT Sans</option>
+                    <option value="Arial">Arial</option>
+                    <option value="Helvetica">Helvetica</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Trebuchet MS">Trebuchet MS</option>
+                  </optgroup>
+                  <optgroup label="── Моноширинные ──">
+                    <option value="Courier New">Courier New</option>
+                  </optgroup>
                 </select>
               </div>
 

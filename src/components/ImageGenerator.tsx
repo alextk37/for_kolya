@@ -79,52 +79,45 @@ export function ImageGenerator({
           );
         } else {
           // --- Обычный текст ---
-          let fontStr = '';
-          if (layer.fontStyle.includes('italic')) fontStr += 'italic ';
-          if (layer.fontStyle.includes('bold')) fontStr += 'bold ';
-          fontStr += `${layer.fontSize}px ${layer.fontFamily}`;
+          // Автоподбор размера шрифта: уменьшаем, пока текст не впишется в слой
+          const fittedSize = fitFontSize(
+            ctx,
+            cellValue,
+            layer.width,
+            layer.height,
+            layer.fontFamily,
+            layer.fontStyle,
+            layer.fontSize
+          );
+
+          const fontStr = buildFontString(layer.fontStyle, fittedSize, layer.fontFamily);
           ctx.font = fontStr;
           ctx.fillStyle = layer.color;
           ctx.textAlign = layer.textAlign;
           ctx.textBaseline = 'top';
 
-          // --- Перенос текста (word wrap) ---
-          const lines: string[] = [];
-          const words = cellValue.split(' ');
-          let currentLine = '';
+          // --- Перенос текста с подобранным размером ---
+          const padding = 8;
+          const availW = layer.width - 2 * padding;
+          const lines = wrapWords(ctx, cellValue, availW);
 
-          for (const word of words) {
-            const testLine = currentLine ? `${currentLine} ${word}` : word;
-            const metrics = ctx.measureText(testLine);
-            if (metrics.width > layer.width - 12 && currentLine) {
-              lines.push(currentLine);
-              currentLine = word;
-            } else {
-              currentLine = testLine;
-            }
-          }
-          if (currentLine) lines.push(currentLine);
-
-          if (lines.length === 0) {
-            lines.push(cellValue);
-          }
-
-          const lineHeight = layer.fontSize * 1.3;
+          const lineHeight = fittedSize * 1.3;
           const totalTextHeight = lines.length * lineHeight;
-          let startY = layer.y + (layer.height - totalTextHeight) / 2;
+          // Вертикальное центрирование
+          let startY = layer.y + Math.max(padding, (layer.height - totalTextHeight) / 2);
 
-          // --- Обрезка по границам слоя ---
+          // --- Clip строго по границам слоя ---
           ctx.save();
           ctx.beginPath();
           ctx.rect(layer.x, layer.y, layer.width, layer.height);
           ctx.clip();
 
           for (const line of lines) {
-            let lineX = layer.x + 6;
+            let lineX = layer.x + padding;
             if (layer.textAlign === 'center') {
               lineX = layer.x + layer.width / 2;
             } else if (layer.textAlign === 'right') {
-              lineX = layer.x + layer.width - 6;
+              lineX = layer.x + layer.width - padding;
             }
             ctx.fillText(line, lineX, startY);
             startY += lineHeight;
@@ -280,4 +273,71 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onerror = reject;
     img.src = src;
   });
+}
+
+/** Собирает строку шрифта для Canvas API */
+function buildFontString(fontStyle: string, fontSize: number, fontFamily: string): string {
+  let s = '';
+  if (fontStyle.includes('italic')) s += 'italic ';
+  if (fontStyle.includes('bold')) s += 'bold ';
+  s += `${fontSize}px "${fontFamily}"`;
+  return s;
+}
+
+/**
+ * Переносит текст по словам так, чтобы каждая строка не превышала availWidth.
+ * ctx.font должен быть уже установлен.
+ */
+function wrapWords(ctx: CanvasRenderingContext2D, text: string, availWidth: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (ctx.measureText(candidate).width > availWidth && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length > 0 ? lines : [text];
+}
+
+/**
+ * Подбирает максимальный размер шрифта (≤ requestedSize), при котором весь текст
+ * вписывается в область layerWidth × layerHeight (с учётом padding).
+ * Алгоритм: уменьшаем размер на 1px до тех пор, пока текст не вписывается.
+ */
+function fitFontSize(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  layerWidth: number,
+  layerHeight: number,
+  fontFamily: string,
+  fontStyle: string,
+  requestedSize: number
+): number {
+  const MIN_SIZE = 6;
+  const padding = 8;
+  const availW = layerWidth - 2 * padding;
+  const availH = layerHeight - 2 * padding;
+
+  let size = Math.min(requestedSize, layerHeight); // не может быть больше высоты слоя
+
+  while (size >= MIN_SIZE) {
+    ctx.font = buildFontString(fontStyle, size, fontFamily);
+    const lines = wrapWords(ctx, text, availW);
+    const totalH = lines.length * size * 1.3;
+    const maxW = Math.max(...lines.map((l) => ctx.measureText(l).width));
+
+    if (maxW <= availW && totalH <= availH) {
+      return size;
+    }
+    size--;
+  }
+
+  return MIN_SIZE;
 }
