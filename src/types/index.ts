@@ -51,3 +51,37 @@ export interface AppState {
   resizeHandle: string | null;
   dragOffset: { x: number; y: number } | null;
 }
+
+/**
+ * Метаданные проекта для сохранения/загрузки.
+ * Хранится в IndexedDB.
+ */
+export interface ProjectManifest {
+  /** Уникальный ID проекта */
+  id: string;
+  /** Название, заданное пользователем */
+  name: string;
+  /** Дата создания (ISO) */
+  createdAt: string;
+  /** Дата последнего изменения (ISO) */
+  updatedAt: string;
+  /** Имя файла изображения-шаблона */
+  imageFileName: string;
+  /** Имя CSV-файла */
+  csvFileName: string;
+  /** Размер изображения */
+  imageSize: { width: number; height: number };
+  /** Слои (все настройки позиции, шрифта, штрихкода) */
+  layers: TextLayer[];
+  /** Данные CSV (нужны для генерации) */
+  csvData: CsvData;
+}
+
+/**
+ * Проект целиком — манифест + бинарные данные (blob'ы).
+ * Хранится в IndexedDB.
+ */
+export interface ProjectRecord extends ProjectManifest {
+  /** Blob изображения-шаблона */
+  imageBlob: Blob;
+}

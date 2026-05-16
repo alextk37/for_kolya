@@ -230,6 +230,35 @@ export function useAppState() {
     imageRef.current = null;
   }, [imageUrl]);
 
+  /**
+   * Загружает состояние из сохранённого проекта.
+   * Используется при открытии проекта из ProjectSelector.
+   */
+  const loadFromProject = useCallback(
+    (
+      url: string,
+      size: { width: number; height: number },
+      csv: CsvData,
+      projectLayers: TextLayer[],
+      img: HTMLImageElement
+    ) => {
+      // Не revoke-им предыдущий imageUrl — он может быть переиспользован
+      setImageUrl(url);
+      setImageSize(size);
+      setCsvData(csv);
+      setLayers(projectLayers);
+      setSelectedLayerId(projectLayers.length > 0 ? projectLayers[0].id : null);
+      setIsDragging(false);
+      setIsResizing(false);
+      setResizeHandle(null);
+      setDragOffset(null);
+      setIsGenerating(false);
+      setGeneratedCount(0);
+      imageRef.current = img;
+    },
+    []
+  );
+
   return {
     imageUrl,
     imageSize,
@@ -254,6 +283,7 @@ export function useAppState() {
     doResize,
     endResize,
     resetAll,
+    loadFromProject,
     setIsGenerating,
     setGeneratedCount,
   };

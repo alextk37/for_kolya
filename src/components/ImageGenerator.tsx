@@ -229,10 +229,10 @@ export function ImageGenerator({
         <div className="image-generator__results">
           <div className="image-generator__results-header">
             <span className="image-generator__results-title">
-              Результаты ({downloadUrls.length})
+              ✅ Готово ({downloadUrls.length})
             </span>
             <button
-              className="btn btn--small btn--primary"
+              className="image-generator__download-all-btn"
               onClick={downloadAllAsZip}
               disabled={isZipping}
             >
@@ -242,7 +242,9 @@ export function ImageGenerator({
                   Архивация...
                 </>
               ) : (
-                'Скачать ZIP'
+                <>
+                  ⬇ Скачать всё ZIP
+                </>
               )}
             </button>
           </div>

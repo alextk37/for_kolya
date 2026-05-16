@@ -169,6 +169,7 @@ body {
   align-items: center;
   gap: 14px;
   text-decoration: none;
+  flex-shrink: 0;
 }
 
 .app-header__emblem {
@@ -185,6 +186,11 @@ body {
   font-family: var(--font-display);
   box-shadow: 0 0 20px var(--gold-glow);
   letter-spacing: -0.02em;
+  transition: box-shadow var(--transition-base);
+}
+
+.app-header__emblem:hover {
+  box-shadow: 0 0 30px var(--gold-glow), 0 0 60px rgba(212, 175, 55, 0.15);
 }
 
 .app-header h1 {
@@ -196,20 +202,132 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
   letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .app-header__subtitle {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
+  font-size: 0.88rem;
+  color: var(--text-primary);
   flex: 1;
-  font-weight: 400;
+  font-weight: 500;
   letter-spacing: 0.01em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.04);
 }
 
 .app-header__actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Кнопка "Назад к проектам" */
+.btn--back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  background: var(--bg-glass);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btn--back:hover {
+  color: var(--text-primary);
+  background: var(--bg-glass-hover);
+  border-color: var(--border-glass-hover);
+}
+
+.btn--back:active {
+  transform: scale(0.97);
+}
+
+/* Кнопка "Сохранить" */
+.btn--save {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 18px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #0a0a0f;
+  background: var(--gold-gradient);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  box-shadow: 0 0 12px var(--gold-glow);
+}
+
+.btn--save:hover {
+  box-shadow: 0 0 24px var(--gold-glow), 0 0 48px rgba(212, 175, 55, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn--save:active {
+  transform: translateY(0);
+  box-shadow: 0 0 8px var(--gold-glow);
+}
+
+.btn--save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* Кнопка "Сбросить" */
+.btn--reset {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btn--reset:hover {
+  color: var(--warm);
+  border-color: rgba(192, 57, 43, 0.3);
+  background: rgba(192, 57, 43, 0.06);
+}
+
+/* Кнопка "Папка" */
+.btn--folder {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btn--folder:hover {
+  color: var(--text-secondary);
+  background: var(--bg-glass);
+  border-color: var(--border-glass);
 }
 
 /* ============================================
@@ -1006,6 +1124,41 @@ body {
   width: 100%;
 }
 
+/* Кнопка "Скачать всё ZIP" — заметная, в стиле золотого акцента */
+.image-generator__download-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: #1a1200;
+  background: var(--gold-gradient);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  box-shadow: 0 2px 12px rgba(212, 175, 55, 0.3);
+  align-self: flex-start;
+}
+
+.image-generator__download-all-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(212, 175, 55, 0.5);
+}
+
+.image-generator__download-all-btn:active {
+  transform: translateY(0);
+}
+
+.image-generator__download-all-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 /* ============================================
    Empty State
    ============================================ */
@@ -1103,6 +1256,644 @@ body {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* ============================================
+   Project Selector
+   ============================================ */
+.project-selector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  width: 100%;
+  max-width: 520px;
+  animation: projectSelectorEnter 0.5s ease both;
+}
+
+@keyframes projectSelectorEnter {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Hero секция --- */
+.project-selector__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.project-selector__hero .empty-state__emblem {
+  width: 80px;
+  height: 80px;
+  font-size: 2rem;
+  animation: emblemPulse 3s ease-in-out infinite;
+}
+
+@keyframes emblemPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(212, 175, 55, 0.15); }
+  50%      { box-shadow: 0 0 40px rgba(212, 175, 55, 0.35); }
+}
+
+.project-selector__hero .empty-state__title {
+  font-size: 1.8rem;
+  background: var(--gold-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.project-selector__hero .empty-state__text {
+  max-width: 380px;
+  line-height: 1.5;
+}
+
+/* --- Главные кнопки: Открыть / Новый проект --- */
+.project-selector__main-actions {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+
+.project-selector__main-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform 0.2s ease;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.project-selector__main-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
+}
+
+.project-selector__main-btn--open::before {
+  background: linear-gradient(135deg, rgba(52, 152, 219, 0.08), transparent 60%);
+}
+
+.project-selector__main-btn--new::before {
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.08), transparent 60%);
+}
+
+.project-selector__main-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.project-selector__main-btn--open:hover {
+  border-color: #3498db;
+  background: rgba(52, 152, 219, 0.03);
+}
+
+.project-selector__main-btn--open:hover::before {
+  opacity: 1;
+}
+
+.project-selector__main-btn--new:hover {
+  border-color: var(--gold);
+  background: rgba(212, 175, 55, 0.03);
+}
+
+.project-selector__main-btn--new:hover::before {
+  opacity: 1;
+}
+
+.project-selector__main-btn:active {
+  transform: translateY(0);
+}
+
+.project-selector__main-btn-icon {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.project-selector__main-btn-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.project-selector__main-btn--open .project-selector__main-btn-label {
+  color: #3498db;
+}
+
+.project-selector__main-btn--new .project-selector__main-btn-label {
+  background: var(--gold-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.project-selector__main-btn-hint {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+/* --- Загрузка --- */
+.project-selector__loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  padding: 20px 0;
+}
+
+.project-selector__spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-glass);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* --- Список проектов --- */
+.project-selector__list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.project-selector__list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.project-selector__list-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.project-selector__list-count {
+  font-size: 0.65rem;
+  color: var(--text-tertiary);
+  background: var(--bg-surface);
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border-glass);
+}
+
+/* --- Карточка проекта --- */
+.project-selector__card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform 0.2s ease;
+}
+
+.project-selector__card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--gold-gradient-subtle), transparent 60%);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
+}
+
+.project-selector__card:hover {
+  background: var(--bg-glass-hover);
+  border-color: var(--border-glass-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.project-selector__card:hover::before {
+  opacity: 1;
+}
+
+.project-selector__card:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.project-selector__card:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* --- Иконка проекта (цветной квадратик) --- */
+.project-selector__card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+}
+
+/* --- Тело карточки --- */
+.project-selector__card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.project-selector__card-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--transition-fast);
+}
+
+.project-selector__card:hover .project-selector__card-name {
+  color: var(--gold-light);
+}
+
+.project-selector__card-meta {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-selector__card-date {
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+}
+
+/* --- Действия на карточке --- */
+.project-selector__card-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  z-index: 1;
+}
+
+.project-selector__delete-btn {
+  opacity: 0;
+  transition:
+    opacity var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.project-selector__card:hover .project-selector__delete-btn,
+.project-selector__card:focus-within .project-selector__delete-btn {
+  opacity: 0.5;
+}
+
+.project-selector__delete-btn:hover {
+  opacity: 1 !important;
+  color: var(--warm) !important;
+  background: rgba(192, 57, 43, 0.1);
+}
+
+/* --- Подтверждение удаления --- */
+.project-selector__confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--warm);
+  white-space: nowrap;
+  animation: fadeIn 0.15s ease;
+}
+
+.project-selector__confirm .btn--tiny {
+  padding: 2px 10px;
+  font-size: 0.7rem;
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
+}
+
+.project-selector__export-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  line-height: 1;
+  opacity: 1;
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
+  margin-right: 4px;
+  background: rgba(52, 152, 219, 0.08);
+  border: 1px solid rgba(52, 152, 219, 0.15);
+  color: #5dade2;
+  cursor: pointer;
+}
+
+.project-selector__export-btn:hover {
+  background: rgba(52, 152, 219, 0.2);
+  box-shadow: 0 0 12px rgba(52, 152, 219, 0.2);
+  color: #85c1e9;
+}
+
+.project-selector__export-btn:active {
+  background: rgba(52, 152, 219, 0.25);
+}
+
+.project-selector__export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.project-selector__import-row {
+  margin-top: 8px;
+}
+
+/* --- Пустое состояние --- */
+.project-selector__empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 20px;
+  text-align: center;
+  border: 1px dashed var(--border-glass);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  transition: border-color var(--transition-fast);
+}
+
+.project-selector__empty-state:hover {
+  border-color: var(--border-glass-hover);
+}
+
+.project-selector__empty-icon {
+  font-size: 2.5rem;
+  opacity: 0.3;
+}
+
+.project-selector__empty-text {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin: 0;
+  line-height: 1.5;
+  max-width: 300px;
+}
+
+/* --- Кнопка нового проекта --- */
+.project-selector__create-btn {
+  margin-top: 4px;
+  padding: 12px 32px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  transition:
+    transform 0.2s ease,
+    box-shadow var(--transition-fast);
+}
+
+.project-selector__create-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-gold);
+}
+
+.project-selector__create-btn:active {
+  transform: translateY(0);
+}
+
+/* --- Утилиты --- */
+.btn--tiny {
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
+}
+
+.app-header__save-msg {
+  font-size: 0.78rem;
+  color: var(--success);
+  white-space: nowrap;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================
+   Modal
+   ============================================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  animation: overlayIn 0.15s ease;
+}
+
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  padding: 28px 32px 24px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: var(--shadow-lg), 0 0 60px rgba(0, 0, 0, 0.4);
+  animation: modalIn 0.2s ease both;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal__title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 16px 0;
+}
+
+.modal__input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.modal__input:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-glow);
+}
+
+.modal__input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.modal__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.modal__note-icon {
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+
+/* Расширенное модальное окно сохранения */
+.modal--save {
+  max-width: 480px;
+}
+
+.modal__field {
+  margin-bottom: 16px;
+}
+
+.modal__label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.modal__folder-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.modal__folder-name {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-glass);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal__folder-hint {
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.modal__radio-group {
+  display: flex;
+  gap: 16px;
+}
+
+.modal__radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  padding: 6px 12px;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.modal__radio:hover {
+  border-color: var(--gold);
+  background: var(--gold-glow);
+}
+
+.modal__radio input[type="radio"] {
+  accent-color: var(--gold);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.modal__radio:has(input:checked) {
+  border-color: var(--gold);
+  background: var(--gold-glow);
 }
 
 /* ============================================
