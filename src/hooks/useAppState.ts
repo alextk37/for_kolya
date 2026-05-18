@@ -15,7 +15,7 @@ function createDefaultBarcodeOptions(): BarcodeOptions {
     width: 1,
     displayValue: true,
     fontSize: 12,
-    lineColor: '#000000',
+    lineColor: '#010101',
     background: '#ffffff',
     margin: 4,
   };
@@ -41,6 +41,7 @@ export function useAppState() {
     setImageUrl(url);
 
     const img = new Image();
+    img.crossOrigin = 'anonymous';
     img.onload = () => {
       setImageSize({ width: img.naturalWidth, height: img.naturalHeight });
       imageRef.current = img;
@@ -66,7 +67,7 @@ export function useAppState() {
           height: isBarcode ? 60 : DEFAULT_LAYER_HEIGHT,
           fontSize: 16,
           fontFamily: 'Arial',
-          color: '#000000',
+          color: '#010101',
           textAlign: 'left' as CanvasTextAlign,
           fontStyle: 'normal',
           rotation: 0,

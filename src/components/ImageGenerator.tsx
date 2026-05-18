@@ -129,9 +129,27 @@ export function ImageGenerator({
         ctx.restore();
       }
 
-      const blob = await new Promise<Blob>((resolve) =>
-        canvas.toBlob((b) => resolve(b!), 'image/png')
-      );
+      let blob: Blob;
+      try {
+        blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((b) => {
+            if (b) resolve(b);
+            else reject(new Error('canvas.toBlob() вернул null — возможно tainted canvas'));
+          }, 'image/png');
+        });
+      } catch (err) {
+        console.error('Ошибка экспорта canvas, пробуем альтернативный метод:', err);
+        // Альтернативный метод: toDataURL → Blob
+        const dataUrl = canvas.toDataURL('image/png');
+        const byteString = atob(dataUrl.split(',')[1]);
+        const mimeString = 'image/png';
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+          ia[i] = byteString.charCodeAt(i);
+        }
+        blob = new Blob([ab], { type: mimeString });
+      }
       const url = URL.createObjectURL(blob);
       urls.push(url);
       blobs.push(blob);
@@ -271,6 +289,8 @@ export function ImageGenerator({
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    // Устанавливаем crossOrigin для предотвращения tainted canvas в Яндекс Браузере
+    img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
     img.onerror = reject;
     img.src = src;

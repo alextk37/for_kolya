@@ -558,6 +558,7 @@ function createImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob);
     const img = new Image();
+    img.crossOrigin = 'anonymous';
     img.onload = () => {
       URL.revokeObjectURL(url);
       resolve(img);

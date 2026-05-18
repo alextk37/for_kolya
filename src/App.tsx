@@ -41,6 +41,7 @@ function App() {
         // Восстанавливаем изображение из blob
         const imageUrl = URL.createObjectURL(record.imageBlob);
         const img = new Image();
+        img.crossOrigin = 'anonymous';
         img.onload = () => {
           state.loadFromProject(
             imageUrl,
