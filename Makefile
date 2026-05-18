@@ -1,4 +1,8 @@
-.PHONY: dev build preview install clean up
+.PHONY: dev build preview install clean commit push deploy all up
+
+# ──────────────────────────────────────────────
+# Разработка
+# ──────────────────────────────────────────────
 
 # Запуск dev-сервера
 dev:
@@ -19,3 +23,24 @@ install:
 # Очистка зависимостей и сборки
 clean:
 	rm -rf node_modules dist
+
+# ──────────────────────────────────────────────
+# Git: коммит, пуш, деплой
+# ──────────────────────────────────────────────
+
+# Коммит с сообщением: make commit msg="описание изменений"
+commit:
+	git add -A
+	git commit -m "$(msg)"
+
+# Пуш в текущую ветку
+push:
+	git push
+
+# Деплой на GitHub Pages (сборка + публикация в gh-pages ветку)
+deploy:
+	npm run deploy
+
+# Полный цикл: коммит → пуш → деплой
+# Использование: make all msg="описание изменений"
+all: commit push deploy

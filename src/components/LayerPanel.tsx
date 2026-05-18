@@ -6,6 +6,17 @@ interface LayerPanelProps {
   selectedLayerId: string | null;
   onSelectLayer: (id: string | null) => void;
   onUpdateLayer: (id: string, updates: Partial<TextLayer>) => void;
+  onDeleteLayer: (id: string) => void;
+  onDuplicateLayer: (id: string) => void;
+  onToggleVisibility: (id: string) => void;
+  onToggleLock: (id: string) => void;
+  onMoveUp: (id: string) => void;
+  onMoveDown: (id: string) => void;
+  imageSize: { width: number; height: number } | null;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
 }
 
 export function LayerPanel({
@@ -14,8 +25,26 @@ export function LayerPanel({
   selectedLayerId,
   onSelectLayer,
   onUpdateLayer,
+  onDeleteLayer,
+  onDuplicateLayer,
+  onToggleVisibility,
+  onToggleLock,
+  onMoveUp,
+  onMoveDown,
+  imageSize,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
 }: LayerPanelProps) {
   const selectedLayer = layers.find((l) => l.id === selectedLayerId);
+
+  // Сортируем слои по order для отображения
+  const sortedLayers = [...layers].sort((a, b) => a.order - b.order);
+
+  // Динамические max для слайдеров позиции
+  const maxX = imageSize?.width || 2000;
+  const maxY = imageSize?.height || 2000;
 
   return (
     <div className="layer-panel">
@@ -25,13 +54,44 @@ export function LayerPanel({
         <span className="section-header__badge">{layers.length}</span>
       </div>
 
+      {/* Undo/Redo */}
+      <div className="layer-panel__undo-row">
+        <button
+          className="btn btn--ghost btn--small"
+          onClick={onUndo}
+          disabled={!canUndo}
+          title="Отменить (Ctrl+Z)"
+        >
+          ↩ Отменить
+        </button>
+        <button
+          className="btn btn--ghost btn--small"
+          onClick={onRedo}
+          disabled={!canRedo}
+          title="Повторить (Ctrl+Shift+Z)"
+        >
+          ↪ Повторить
+        </button>
+      </div>
+
       <div className="layer-list">
-        {layers.map((layer) => (
+        {sortedLayers.map((layer) => (
           <div
             key={layer.id}
-            className={`layer-item ${layer.id === selectedLayerId ? 'layer-item--selected' : ''}`}
+            className={`layer-item ${layer.id === selectedLayerId ? 'layer-item--selected' : ''} ${!layer.visible ? 'layer-item--hidden' : ''} ${layer.locked ? 'layer-item--locked' : ''}`}
             onClick={() => onSelectLayer(layer.id)}
           >
+            <button
+              className="layer-item__visibility-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleVisibility(layer.id);
+              }}
+              title={layer.visible ? 'Скрыть слой' : 'Показать слой'}
+            >
+              {layer.visible ? '👁' : '👁‍🗨'}
+            </button>
+
             <span
               className="layer-item__color-dot"
               style={{ backgroundColor: layer.isBarcode ? '#d4af37' : layer.color }}
@@ -39,7 +99,34 @@ export function LayerPanel({
             <span className="layer-item__name">
               {layer.isBarcode ? '📶 ' : ''}{layer.columnName}
             </span>
+
+            {layer.locked && <span className="layer-item__lock-icon" title="Заблокирован">🔒</span>}
+
             <span className="layer-item__index">#{layer.columnIndex + 1}</span>
+
+            <div className="layer-item__actions">
+              <button
+                className="layer-item__action-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveUp(layer.id);
+                }}
+                title="Выше"
+                disabled={layer.order === 0}
+              >
+                ▲
+              </button>
+              <button
+                className="layer-item__action-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveDown(layer.id);
+                }}
+                title="Ниже"
+              >
+                ▼
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -55,6 +142,31 @@ export function LayerPanel({
             </span>
           </div>
 
+          {/* Действия со слоем */}
+          <div className="layer-properties__actions">
+            <button
+              className="btn btn--ghost btn--small"
+              onClick={() => onToggleLock(selectedLayer.id)}
+              title={selectedLayer.locked ? 'Разблокировать' : 'Заблокировать'}
+            >
+              {selectedLayer.locked ? '🔓 Разблокировать' : '🔒 Блокировать'}
+            </button>
+            <button
+              className="btn btn--ghost btn--small"
+              onClick={() => onDuplicateLayer(selectedLayer.id)}
+              title="Дублировать слой (Ctrl+D)"
+            >
+              📋 Дублировать
+            </button>
+            <button
+              className="btn btn--danger btn--small"
+              onClick={() => onDeleteLayer(selectedLayer.id)}
+              title="Удалить слой (Delete)"
+            >
+              🗑 Удалить
+            </button>
+          </div>
+
           <div className="prop-group">
             <div className="prop-group__label">
               <span>Позиция X</span>
@@ -63,7 +175,7 @@ export function LayerPanel({
             <input
               type="range"
               min={0}
-              max={2000}
+              max={maxX}
               value={selectedLayer.x}
               onChange={(e) => onUpdateLayer(selectedLayer.id, { x: parseInt(e.target.value, 10) })}
             />
@@ -77,10 +189,43 @@ export function LayerPanel({
             <input
               type="range"
               min={0}
-              max={2000}
+              max={maxY}
               value={selectedLayer.y}
               onChange={(e) => onUpdateLayer(selectedLayer.id, { y: parseInt(e.target.value, 10) })}
             />
+          </div>
+
+          {/* Числовой ввод для точного позиционирования */}
+          <div className="prop-row">
+            <div className="prop-group">
+              <div className="prop-group__label">
+                <span>X (точно)</span>
+              </div>
+              <input
+                type="number"
+                min={0}
+                max={maxX}
+                value={Math.round(selectedLayer.x)}
+                onChange={(e) =>
+                  onUpdateLayer(selectedLayer.id, { x: parseInt(e.target.value, 10) || 0 })
+                }
+              />
+            </div>
+
+            <div className="prop-group">
+              <div className="prop-group__label">
+                <span>Y (точно)</span>
+              </div>
+              <input
+                type="number"
+                min={0}
+                max={maxY}
+                value={Math.round(selectedLayer.y)}
+                onChange={(e) =>
+                  onUpdateLayer(selectedLayer.id, { y: parseInt(e.target.value, 10) || 0 })
+                }
+              />
+            </div>
           </div>
 
           <div className="prop-row">
@@ -91,7 +236,7 @@ export function LayerPanel({
               <input
                 type="number"
                 min={50}
-                max={2000}
+                max={maxX}
                 value={Math.round(selectedLayer.width)}
                 onChange={(e) =>
                   onUpdateLayer(selectedLayer.id, { width: parseInt(e.target.value, 10) || 50 })
@@ -106,7 +251,7 @@ export function LayerPanel({
               <input
                 type="number"
                 min={20}
-                max={2000}
+                max={maxY}
                 value={Math.round(selectedLayer.height)}
                 onChange={(e) =>
                   onUpdateLayer(selectedLayer.id, { height: parseInt(e.target.value, 10) || 20 })

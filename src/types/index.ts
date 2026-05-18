@@ -33,6 +33,12 @@ export interface TextLayer {
   isBarcode: boolean;
   /** Настройки штрихкода (только если isBarcode === true) */
   barcodeOptions: BarcodeOptions;
+  /** Видимость слоя (false — скрыт, не рендерится при генерации) */
+  visible: boolean;
+  /** Блокировка слоя (true — нельзя перемещать/ресайзить) */
+  locked: boolean;
+  /** Порядок слоя (z-index). Больше значение — выше слой */
+  order: number;
 }
 
 export interface CsvData {
@@ -84,4 +90,32 @@ export interface ProjectManifest {
 export interface ProjectRecord extends ProjectManifest {
   /** Blob изображения-шаблона */
   imageBlob: Blob;
+}
+
+/** Настройки генерации изображений */
+export interface GenerationOptions {
+  /** Формат выходных файлов */
+  format: 'png' | 'jpeg' | 'webp';
+  /** Качество (0-1) для jpeg/webp */
+  quality: number;
+  /** Начальная строка (0-based) */
+  startRow: number;
+  /** Конечная строка (0-based, включительно) */
+  endRow: number;
+  /** Шаблон имени файла, например "{Name}_{index}" */
+  fileNameTemplate: string;
+}
+
+/** Запись об ошибке при генерации */
+export interface GenerationError {
+  rowIndex: number;
+  message: string;
+}
+
+/** Toast-уведомление */
+export interface ToastMessage {
+  id: string;
+  type: 'success' | 'error' | 'info' | 'warning';
+  text: string;
+  duration?: number;
 }

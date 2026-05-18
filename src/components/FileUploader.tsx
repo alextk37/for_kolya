@@ -40,27 +40,28 @@ export function FileUploader({
     onDrop: onImageDrop,
     accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.bmp'] },
     maxFiles: 1,
-    disabled: hasImage,
+    disabled: false, // Всегда разрешаем замену
   });
 
   const csvDropzone = useDropzone({
     onDrop: onCsvDrop,
     accept: { 'text/csv': ['.csv'], 'text/plain': ['.csv'] },
     maxFiles: 1,
-    disabled: hasCsv,
+    disabled: false, // Всегда разрешаем замену
   });
 
   return (
     <div className="file-uploader">
       <div
         {...imageDropzone.getRootProps()}
-        className={`dropzone ${hasImage ? 'dropzone--loaded' : ''}`}
+        className={`dropzone ${hasImage ? 'dropzone--loaded' : ''} ${imageDropzone.isDragActive ? 'dropzone--drag-active' : ''}`}
       >
         <input {...imageDropzone.getInputProps()} />
         {hasImage ? (
           <div className="dropzone__content">
             <span className="dropzone__icon">🖼️</span>
             <span className="dropzone__filename">{imageName || 'Изображение загружено'}</span>
+            <span className="dropzone__replace-hint">Перетащите или кликните для замены</span>
           </div>
         ) : (
           <>
@@ -77,13 +78,14 @@ export function FileUploader({
 
       <div
         {...csvDropzone.getRootProps()}
-        className={`dropzone ${hasCsv ? 'dropzone--loaded' : ''}`}
+        className={`dropzone ${hasCsv ? 'dropzone--loaded' : ''} ${csvDropzone.isDragActive ? 'dropzone--drag-active' : ''}`}
       >
         <input {...csvDropzone.getInputProps()} />
         {hasCsv ? (
           <div className="dropzone__content">
             <span className="dropzone__icon">📊</span>
             <span className="dropzone__filename">{csvName || 'CSV загружен'}</span>
+            <span className="dropzone__replace-hint">Перетащите или кликните для замены</span>
           </div>
         ) : (
           <>

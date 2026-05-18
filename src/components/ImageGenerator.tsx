@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import JSZip from 'jszip';
-import type { TextLayer, CsvData } from '../types';
-import { drawBarcodeOnCanvas } from '../utils/drawBarcode';
+import type { TextLayer, CsvData, GenerationError } from '../types';
+import { renderScene } from '../utils/canvasRenderer';
 
 interface ImageGeneratorProps {
   imageUrl: string;
@@ -14,10 +14,13 @@ interface ImageGeneratorProps {
   onStartGeneration: () => void;
   onGenerationProgress: (count: number) => void;
   onGenerationComplete: () => void;
+  /** Открыть модальный предпросмотр конкретной строки */
+  onPreviewRow: (index: number) => void;
+  /** Ref на загруженное изображение */
+  imageRef: React.RefObject<HTMLImageElement | null>;
 }
 
 export function ImageGenerator({
-  imageUrl,
   imageWidth,
   imageHeight,
   layers,
@@ -27,12 +30,22 @@ export function ImageGenerator({
   onStartGeneration,
   onGenerationProgress,
   onGenerationComplete,
+  onPreviewRow,
+  imageRef,
 }: ImageGeneratorProps) {
   const [downloadUrls, setDownloadUrls] = useState<string[]>([]);
   const [isZipping, setIsZipping] = useState(false);
   const blobCache = useRef<Blob[]>([]);
   const urlsRef = useRef<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+  const [generationErrors, setGenerationErrors] = useState<GenerationError[]>([]);
+
+  // Настройки генерации
+  const [genFormat, setGenFormat] = useState<'png' | 'jpeg' | 'webp'>('png');
+  const [genQuality, setGenQuality] = useState(0.92);
+  const [genStartRow, setGenStartRow] = useState(0);
+  const [genEndRow, setGenEndRow] = useState(csvData.rows.length - 1);
+  const [genFileNameTemplate, setGenFileNameTemplate] = useState('{index}');
 
   // Cleanup всех blob URL при размонтировании компонента
   useEffect(() => {
@@ -52,6 +65,26 @@ export function ImageGenerator({
     onGenerationComplete();
   }, [onGenerationComplete]);
 
+  /** Формирует имя файла из шаблона и данных строки */
+  const buildFileName = useCallback(
+    (row: string[], rowIndex: number, ext: string): string => {
+      let name = genFileNameTemplate;
+      // Подставляем {index} — номер строки (1-based)
+      name = name.replace(/\{index\}/g, String(rowIndex + 1));
+      // Подставляем {columnName} — значение из соответствующей колонки
+      csvData.headers.forEach((header, i) => {
+        const safeHeader = header.replace(/[^a-zA-Zа-яА-Я0-9_]/g, '_');
+        const value = (row[i] || '').replace(/[^a-zA-Zа-яА-Я0-9_-]/g, '_');
+        name = name.replace(new RegExp(`\\{${safeHeader}\\}`, 'g'), value);
+      });
+      // Убираем лишние подчёркивания
+      name = name.replace(/_{2,}/g, '_').replace(/^_|_$/g, '');
+      if (!name) name = `generated-${rowIndex + 1}`;
+      return `${name}.${ext}`;
+    },
+    [genFileNameTemplate, csvData.headers]
+  );
+
   const generateImages = useCallback(async () => {
     // Отменяем предыдущую генерацию, если она ещё идёт
     if (abortRef.current) {
@@ -63,142 +96,87 @@ export function ImageGenerator({
     onStartGeneration();
     const urls: string[] = [];
     const blobs: Blob[] = [];
+    const errors: GenerationError[] = [];
 
-    const baseImage = await loadImage(imageUrl);
+    const baseImage = imageRef.current;
+    if (!baseImage) {
+      onGenerationComplete();
+      return;
+    }
 
-    for (let rowIndex = 0; rowIndex < csvData.rows.length; rowIndex++) {
+    const startRow = Math.max(0, genStartRow);
+    const endRow = Math.min(csvData.rows.length - 1, genEndRow);
+    const visibleLayers = layers.filter((l) => l.visible);
+    for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
       // Проверка отмены генерации
       if (abortController.signal.aborted) {
         console.log('Генерация отменена пользователем');
-        // Освобождаем уже созданные URL
         for (const url of urls) {
           URL.revokeObjectURL(url);
         }
         return;
       }
 
-      const row = csvData.rows[rowIndex];
-
-      const canvas = document.createElement('canvas');
-      canvas.width = imageWidth;
-      canvas.height = imageHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        throw new Error('Не удалось получить 2D контекст canvas');
-      }
-
-      ctx.imageSmoothingEnabled = true;
-      // imageSmoothingQuality не поддерживается в некоторых браузерах (Safari < 16.4, Firefox < 109)
-      if ('imageSmoothingQuality' in ctx) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (ctx as any).imageSmoothingQuality = 'high';
-      }
-      ctx.drawImage(baseImage, 0, 0, imageWidth, imageHeight);
-
-      for (const layer of layers) {
-        const cellValue = row[layer.columnIndex];
-        if (!cellValue || cellValue.trim() === '') continue;
-
-        ctx.save();
-
-        // --- Поворот ---
-        const centerX = layer.x + layer.width / 2;
-        const centerY = layer.y + layer.height / 2;
-        ctx.translate(centerX, centerY);
-        ctx.rotate((layer.rotation * Math.PI) / 180);
-        ctx.translate(-centerX, -centerY);
-
-        if (layer.isBarcode) {
-          // --- Генерация EAN-13 штрихкода ---
-          // Генерируем штрихкод на отдельном canvas через JsBarcode,
-          // затем вставляем на целевой canvas как изображение.
-          drawBarcodeOnCanvas(
-            ctx,
-            cellValue,
-            layer.x,
-            layer.y,
-            layer.width,
-            layer.height,
-            layer.barcodeOptions
-          );
-        } else {
-          // --- Обычный текст ---
-          // Автоподбор размера шрифта: уменьшаем, пока текст не впишется в слой
-          const fittedSize = fitFontSize(
-            ctx,
-            cellValue,
-            layer.width,
-            layer.height,
-            layer.fontFamily,
-            layer.fontStyle,
-            layer.fontSize
-          );
-
-          const fontStr = buildFontString(layer.fontStyle, fittedSize, layer.fontFamily);
-          ctx.font = fontStr;
-          ctx.fillStyle = layer.color;
-          ctx.textAlign = layer.textAlign;
-          ctx.textBaseline = 'top';
-
-          // --- Перенос текста с подобранным размером ---
-          const padding = 8;
-          const availW = layer.width - 2 * padding;
-          const lines = wrapWords(ctx, cellValue, availW);
-
-          const lineHeight = fittedSize * 1.3;
-          const totalTextHeight = lines.length * lineHeight;
-          // Вертикальное центрирование
-          let startY = layer.y + Math.max(padding, (layer.height - totalTextHeight) / 2);
-
-          // --- Clip строго по границам слоя ---
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(layer.x, layer.y, layer.width, layer.height);
-          ctx.clip();
-
-          for (const line of lines) {
-            let lineX = layer.x + padding;
-            if (layer.textAlign === 'center') {
-              lineX = layer.x + layer.width / 2;
-            } else if (layer.textAlign === 'right') {
-              lineX = layer.x + layer.width - padding;
-            }
-            ctx.fillText(line, lineX, startY);
-            startY += lineHeight;
-          }
-
-          ctx.restore();
-        }
-
-        ctx.restore();
-      }
-
-      let blob: Blob;
       try {
-        blob = await new Promise<Blob>((resolve, reject) => {
-          canvas.toBlob((b) => {
-            if (b) resolve(b);
-            else reject(new Error('canvas.toBlob() вернул null — возможно tainted canvas'));
-          }, 'image/png');
-        });
-      } catch (err) {
-        console.error('Ошибка экспорта canvas, пробуем альтернативный метод:', err);
-        // Альтернативный метод: toDataURL → Blob
-        const dataUrl = canvas.toDataURL('image/png');
-        const byteString = atob(dataUrl.split(',')[1]);
-        const mimeString = 'image/png';
-        const ab = new ArrayBuffer(byteString.length);
-        const ia = new Uint8Array(ab);
-        for (let i = 0; i < byteString.length; i++) {
-          ia[i] = byteString.charCodeAt(i);
+        const canvas = document.createElement('canvas');
+        canvas.width = imageWidth;
+        canvas.height = imageHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          throw new Error('Не удалось получить 2D контекст canvas');
         }
-        blob = new Blob([ab], { type: mimeString });
-      }
-      const url = URL.createObjectURL(blob);
-      urls.push(url);
-      blobs.push(blob);
 
-      onGenerationProgress(rowIndex + 1);
+        // Используем единый рендерер
+        renderScene(ctx, {
+          width: imageWidth,
+          height: imageHeight,
+          layers: visibleLayers,
+          csvData,
+          rowIndex,
+          image: baseImage,
+          drawSelection: false,
+          respectVisibility: true,
+        });
+
+        let blob: Blob;
+        const mimeType = genFormat === 'jpeg' ? 'image/jpeg' : genFormat === 'webp' ? 'image/webp' : 'image/png';
+        const quality = genFormat === 'png' ? undefined : genQuality;
+
+        try {
+          blob = await new Promise<Blob>((resolve, reject) => {
+            canvas.toBlob(
+              (b) => {
+                if (b) resolve(b);
+                else reject(new Error('canvas.toBlob() вернул null — возможно tainted canvas'));
+              },
+              mimeType,
+              quality
+            );
+          });
+        } catch (err) {
+          // Альтернативный метод: toDataURL → Blob
+          console.warn('toBlob failed, trying toDataURL fallback:', err);
+          const dataUrl = canvas.toDataURL(mimeType, quality);
+          const byteString = atob(dataUrl.split(',')[1]);
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+          }
+          blob = new Blob([ab], { type: mimeType });
+        }
+
+        const url = URL.createObjectURL(blob);
+        urls.push(url);
+        blobs.push(blob);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        errors.push({ rowIndex, message });
+        console.error(`Ошибка генерации строки ${rowIndex + 1}:`, message);
+      }
+
+      onGenerationProgress(rowIndex - startRow + 1);
+      // Даём браузеру время обновить UI
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
@@ -209,9 +187,14 @@ export function ImageGenerator({
     urlsRef.current = urls;
     blobCache.current = blobs;
     setDownloadUrls(urls);
+    setGenerationErrors(errors);
     onGenerationComplete();
     abortRef.current = null;
-  }, [imageUrl, imageWidth, imageHeight, layers, csvData, onStartGeneration, onGenerationProgress, onGenerationComplete]);
+  }, [
+    imageRef, imageWidth, imageHeight, layers, csvData,
+    genStartRow, genEndRow, genFormat, genQuality,
+    onStartGeneration, onGenerationProgress, onGenerationComplete,
+  ]);
 
   const downloadAllAsZip = useCallback(async () => {
     if (blobCache.current.length === 0) return;
@@ -219,11 +202,13 @@ export function ImageGenerator({
     setIsZipping(true);
 
     const zip = new JSZip();
+    const ext = genFormat === 'jpeg' ? 'jpg' : genFormat;
 
     for (let i = 0; i < blobCache.current.length; i++) {
-      const blob = blobCache.current[i];
-      const fileName = `generated-${i + 1}.png`;
-      zip.file(fileName, blob);
+      const rowIndex = genStartRow + i;
+      const row = csvData.rows[rowIndex];
+      const fileName = buildFileName(row, rowIndex, ext);
+      zip.file(fileName, blobCache.current[i]);
     }
 
     const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -239,23 +224,29 @@ export function ImageGenerator({
 
     URL.revokeObjectURL(zipUrl);
     setIsZipping(false);
-  }, []);
+  }, [genFormat, genStartRow, csvData, buildFileName]);
 
   const downloadSingle = useCallback(
     (url: string, index: number) => {
+      const rowIndex = genStartRow + index;
+      const row = csvData.rows[rowIndex];
+      const ext = genFormat === 'jpeg' ? 'jpg' : genFormat;
+      const fileName = buildFileName(row, rowIndex, ext);
+
       const a = document.createElement('a');
       a.href = url;
-      a.download = `generated-${index + 1}.png`;
+      a.download = fileName;
       a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
     },
-    []
+    [genFormat, genStartRow, csvData, buildFileName]
   );
 
-  const progressPercent = csvData.rows.length > 0
-    ? Math.round((generatedCount / csvData.rows.length) * 100)
+  const totalToGenerate = Math.max(0, Math.min(csvData.rows.length - 1, genEndRow) - genStartRow + 1);
+  const progressPercent = totalToGenerate > 0
+    ? Math.round((generatedCount / totalToGenerate) * 100)
     : 0;
 
   return (
@@ -266,24 +257,103 @@ export function ImageGenerator({
       </div>
 
       <p className="image-generator__info">
-        Будет создано <strong>{csvData.rows.length}</strong> изображений
-        {layers.length > 0 && (
+        Будет создано <strong>{totalToGenerate}</strong> изображений
+        {layers.filter((l) => l.visible).length > 0 && (
           <>
-            {' '}с <strong>{layers.length}</strong> сло{layers.length === 1 ? 'ем' : 'ями'}
+            {' '}с <strong>{layers.filter((l) => l.visible).length}</strong> сло{layers.filter((l) => l.visible).length === 1 ? 'ем' : 'ями'}
           </>
         )}
       </p>
 
+      {/* Настройки генерации */}
+      <div className="image-generator__settings">
+        <div className="prop-row">
+          <div className="prop-group">
+            <div className="prop-group__label">
+              <span>Формат</span>
+            </div>
+            <select
+              value={genFormat}
+              onChange={(e) => setGenFormat(e.target.value as 'png' | 'jpeg' | 'webp')}
+            >
+              <option value="png">PNG (без потерь)</option>
+              <option value="jpeg">JPEG (меньше размер)</option>
+              <option value="webp">WebP (лучшее сжатие)</option>
+            </select>
+          </div>
+
+          {genFormat !== 'png' && (
+            <div className="prop-group">
+              <div className="prop-group__label">
+                <span>Качество</span>
+                <span className="prop-group__value">{Math.round(genQuality * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0.1}
+                max={1}
+                step={0.05}
+                value={genQuality}
+                onChange={(e) => setGenQuality(parseFloat(e.target.value))}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="prop-row">
+          <div className="prop-group">
+            <div className="prop-group__label">
+              <span>От строки</span>
+            </div>
+            <input
+              type="number"
+              min={1}
+              max={csvData.rows.length}
+              value={genStartRow + 1}
+              onChange={(e) => setGenStartRow(Math.max(0, parseInt(e.target.value, 10) - 1))}
+            />
+          </div>
+
+          <div className="prop-group">
+            <div className="prop-group__label">
+              <span>До строки</span>
+            </div>
+            <input
+              type="number"
+              min={1}
+              max={csvData.rows.length}
+              value={genEndRow + 1}
+              onChange={(e) => setGenEndRow(Math.min(csvData.rows.length - 1, parseInt(e.target.value, 10) - 1))}
+            />
+          </div>
+        </div>
+
+        <div className="prop-group">
+          <div className="prop-group__label">
+            <span>Шаблон имени файла</span>
+          </div>
+          <input
+            type="text"
+            value={genFileNameTemplate}
+            onChange={(e) => setGenFileNameTemplate(e.target.value)}
+            placeholder="{index}"
+          />
+          <span className="prop-group__hint">
+            {'{index}'} — номер строки, {'{Имя_колонки}'} — значение из CSV
+          </span>
+        </div>
+      </div>
+
       <button
         className="btn btn--primary"
         onClick={generateImages}
-        disabled={isGenerating || layers.length === 0}
+        disabled={isGenerating || layers.filter((l) => l.visible).length === 0}
         style={{ width: '100%' }}
       >
         {isGenerating ? (
           <>
             <span className="spinner" />
-            Генерация... {generatedCount}/{csvData.rows.length}
+            Генерация... {generatedCount}/{totalToGenerate}
           </>
         ) : (
           'Сгенерировать все изображения'
@@ -330,103 +400,47 @@ export function ImageGenerator({
             </button>
           </div>
 
+          {generationErrors.length > 0 && (
+            <div className="image-generator__errors">
+              <span className="image-generator__errors-title">
+                ⚠ {generationErrors.length} ошибок при генерации
+              </span>
+              {generationErrors.slice(0, 5).map((err, i) => (
+                <div key={i} className="image-generator__error-item">
+                  Строка {err.rowIndex + 1}: {err.message}
+                </div>
+              ))}
+              {generationErrors.length > 5 && (
+                <span className="image-generator__errors-more">
+                  + ещё {generationErrors.length - 5} ошибок
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="image-generator__previews">
-            {downloadUrls.map((url, index) => (
-              <div key={index} className="image-generator__preview-item">
-                <img src={url} alt={`Generated ${index + 1}`} />
-                <button
-                  className="btn btn--small btn--ghost"
-                  onClick={() => downloadSingle(url, index)}
-                >
-                  #{index + 1}
-                </button>
-              </div>
-            ))}
+            {downloadUrls.map((url, index) => {
+              const rowIndex = genStartRow + index;
+              return (
+                <div key={index} className="image-generator__preview-item">
+                  <img
+                    src={url}
+                    alt={`Generated ${rowIndex + 1}`}
+                    onClick={() => onPreviewRow(rowIndex)}
+                    title="Клик для предпросмотра"
+                  />
+                  <button
+                    className="btn btn--small btn--ghost"
+                    onClick={() => downloadSingle(url, index)}
+                  >
+                    #{rowIndex + 1}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
     </div>
   );
-}
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    // Устанавливаем crossOrigin только для HTTP(S) URL, не для blob:
-    // blob URL не поддерживают crossOrigin и могут вызвать ошибку в некоторых браузерах
-    if (src.startsWith('http')) {
-      img.crossOrigin = 'anonymous';
-    }
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
-}
-
-/** Собирает строку шрифта для Canvas API */
-function buildFontString(fontStyle: string, fontSize: number, fontFamily: string): string {
-  let s = '';
-  if (fontStyle.includes('italic')) s += 'italic ';
-  if (fontStyle.includes('bold')) s += 'bold ';
-  s += `${fontSize}px "${fontFamily}"`;
-  return s;
-}
-
-/**
- * Переносит текст по словам так, чтобы каждая строка не превышала availWidth.
- * ctx.font должен быть уже установлен.
- */
-function wrapWords(ctx: CanvasRenderingContext2D, text: string, availWidth: number): string[] {
-  const words = text.split(' ');
-  const lines: string[] = [];
-  let current = '';
-
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (ctx.measureText(candidate).width > availWidth && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = candidate;
-    }
-  }
-  if (current) lines.push(current);
-  return lines.length > 0 ? lines : [text];
-}
-
-/**
- * Подбирает максимальный размер шрифта (≤ requestedSize), при котором весь текст
- * вписывается в область layerWidth × layerHeight (с учётом padding).
- * Алгоритм: уменьшаем размер на 1px до тех пор, пока текст не вписывается.
- */
-function fitFontSize(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  layerWidth: number,
-  layerHeight: number,
-  fontFamily: string,
-  fontStyle: string,
-  requestedSize: number
-): number {
-  const MIN_SIZE = 6;
-  const padding = 8;
-  const availW = layerWidth - 2 * padding;
-  const availH = layerHeight - 2 * padding;
-
-  let size = Math.min(requestedSize, layerHeight); // не может быть больше высоты слоя
-
-  while (size >= MIN_SIZE) {
-    ctx.font = buildFontString(fontStyle, size, fontFamily);
-    const lines = wrapWords(ctx, text, availW);
-    const totalH = lines.length * size * 1.3;
-    // Используем reduce вместо Math.max(...spread) для избежания Stack Overflow на больших массивах
-    const maxW = lines.reduce((max, l) => Math.max(max, ctx.measureText(l).width), 0);
-
-    if (maxW <= availW && totalH <= availH) {
-      return size;
-    }
-    size--;
-  }
-
-  return MIN_SIZE;
 }

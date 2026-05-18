@@ -1,6 +1,10 @@
-import React, { useRef, useCallback, useEffect } from 'react';
-import type { TextLayer } from '../types';
-import { TextLayerComponent } from './TextLayerComponent';
+import React, { useRef, useCallback, useEffect, useState } from 'react';
+import type { TextLayer, CsvData } from '../types';
+import {
+  renderScene,
+  hitTestLayer,
+  hitTestResizeHandle,
+} from '../utils/canvasRenderer';
 
 interface CanvasEditorProps {
   imageUrl: string;
@@ -10,6 +14,8 @@ interface CanvasEditorProps {
   selectedLayerId: string | null;
   isDragging: boolean;
   isResizing: boolean;
+  csvData: CsvData;
+  previewRowIndex: number;
   onSelectLayer: (id: string | null) => void;
   onStartDrag: (id: string, clientX: number, clientY: number, canvasRect: DOMRect) => void;
   onDoDrag: (clientX: number, clientY: number, canvasRect: DOMRect) => void;
@@ -36,6 +42,8 @@ export function CanvasEditor({
   selectedLayerId,
   isDragging,
   isResizing,
+  csvData,
+  previewRowIndex,
   onSelectLayer,
   onStartDrag,
   onDoDrag,
@@ -45,7 +53,27 @@ export function CanvasEditor({
   onEndResize,
 }: CanvasEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [canvasSize, setCanvasSize] = React.useState({ width: 0, height: 0 });
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  // Загрузка изображения для Canvas-рендеринга
+  useEffect(() => {
+    const img = new Image();
+    if (imageUrl.startsWith('http')) {
+      img.crossOrigin = 'anonymous';
+    }
+    img.onload = () => {
+      imageRef.current = img;
+      setImageLoaded(true);
+    };
+    img.onerror = () => {
+      console.error('Failed to load image for canvas preview');
+      setImageLoaded(false);
+    };
+    img.src = imageUrl;
+  }, [imageUrl]);
 
   // Calculate canvas size to fit the viewport while maintaining aspect ratio
   useEffect(() => {
@@ -73,6 +101,59 @@ export function CanvasEditor({
     return () => window.removeEventListener('resize', updateSize);
   }, [imageWidth, imageHeight]);
 
+  // Рендерим сцену на Canvas при каждом изменении
+  useEffect(() => {
+    if (!canvasRef.current || !imageRef.current || !imageLoaded) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Учитываем devicePixelRatio для чёткости
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvasSize.width * dpr;
+    canvas.height = canvasSize.height * dpr;
+    canvas.style.width = `${canvasSize.width}px`;
+    canvas.style.height = `${canvasSize.height}px`;
+    ctx.scale(dpr, dpr);
+
+    // Масштабируем контекст для отображения полного изображения в canvasSize
+    const scaleX = canvasSize.width / imageWidth;
+    const scaleY = canvasSize.height / imageHeight;
+
+    ctx.save();
+    ctx.scale(scaleX, scaleY);
+
+    renderScene(ctx, {
+      width: imageWidth,
+      height: imageHeight,
+      layers,
+      csvData,
+      rowIndex: previewRowIndex,
+      image: imageRef.current,
+      drawSelection: true,
+      selectedLayerId,
+      respectVisibility: true,
+    });
+
+    ctx.restore();
+  }, [canvasSize, imageWidth, imageHeight, layers, csvData, previewRowIndex, selectedLayerId, imageLoaded]);
+
+  // Преобразование координат мыши в координаты изображения
+  const clientToImageCoords = useCallback(
+    (clientX: number, clientY: number): { imgX: number; imgY: number } => {
+      if (!containerRef.current) return { imgX: 0, imgY: 0 };
+      const rect = containerRef.current.getBoundingClientRect();
+      const scaleX = imageWidth / rect.width;
+      const scaleY = imageHeight / rect.height;
+      return {
+        imgX: (clientX - rect.left) * scaleX,
+        imgY: (clientY - rect.top) * scaleY,
+      };
+    },
+    [imageWidth, imageHeight]
+  );
+
   const handlePointerMove = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
       if (!containerRef.current) return;
@@ -96,18 +177,102 @@ export function CanvasEditor({
 
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent) => {
-      // Deselect if clicking on the canvas background
-      if (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'IMG') {
-        onSelectLayer(null);
+      const { clientX, clientY } = getClientCoords(e);
+      const { imgX, imgY } = clientToImageCoords(clientX, clientY);
+
+      // Проверяем ручки ресайза выбранного слоя
+      if (selectedLayerId) {
+        const selectedLayer = layers.find((l) => l.id === selectedLayerId);
+        if (selectedLayer) {
+          const handle = hitTestResizeHandle(selectedLayer, imgX, imgY);
+          if (handle) {
+            if (!containerRef.current) return;
+            onStartResize(selectedLayer.id, handle, clientX, clientY, containerRef.current.getBoundingClientRect());
+            return;
+          }
+        }
       }
+
+      // Проверяем попадание по слоям (сверху вниз по z-order)
+      const sortedLayers = [...layers]
+        .filter((l) => l.visible)
+        .sort((a, b) => b.order - a.order);
+
+      for (const layer of sortedLayers) {
+        if (hitTestLayer(layer, imgX, imgY)) {
+          onSelectLayer(layer.id);
+
+          // Начинаем перетаскивание, если слой не заблокирован
+          if (!layer.locked && containerRef.current) {
+            onStartDrag(layer.id, clientX, clientY, containerRef.current.getBoundingClientRect());
+          }
+          return;
+        }
+      }
+
+      // Клик по пустому месту — снимаем выделение
+      onSelectLayer(null);
     },
-    [onSelectLayer]
+    [selectedLayerId, layers, clientToImageCoords, onSelectLayer, onStartDrag, onStartResize]
+  );
+
+  // Определяем курсор в зависимости от позиции мыши
+  const [cursorStyle, setCursorStyle] = useState<string>('default');
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (isDragging || isResizing) {
+        handlePointerMove(e);
+        return;
+      }
+
+      const { clientX, clientY } = getClientCoords(e);
+      const { imgX, imgY } = clientToImageCoords(clientX, clientY);
+
+      // Проверяем ручки ресайза выбранного слоя
+      if (selectedLayerId) {
+        const selectedLayer = layers.find((l) => l.id === selectedLayerId);
+        if (selectedLayer && !selectedLayer.locked) {
+          const handle = hitTestResizeHandle(selectedLayer, imgX, imgY);
+          if (handle) {
+            const cursorMap: Record<string, string> = {
+              nw: 'nw-resize',
+              n: 'n-resize',
+              ne: 'ne-resize',
+              w: 'w-resize',
+              e: 'e-resize',
+              sw: 'sw-resize',
+              s: 's-resize',
+              se: 'se-resize',
+            };
+            setCursorStyle(cursorMap[handle] || 'default');
+            return;
+          }
+        }
+      }
+
+      // Проверяем попадание по слоям
+      const sortedLayers = [...layers]
+        .filter((l) => l.visible && !l.locked)
+        .sort((a, b) => b.order - a.order);
+
+      let overLayer = false;
+      for (const layer of sortedLayers) {
+        if (hitTestLayer(layer, imgX, imgY)) {
+          overLayer = true;
+          break;
+        }
+      }
+
+      setCursorStyle(overLayer ? 'move' : 'default');
+    },
+    [isDragging, isResizing, selectedLayerId, layers, clientToImageCoords, handlePointerMove]
   );
 
   return (
     <div
       className="canvas-editor"
-      onMouseMove={handlePointerMove}
+      onMouseMove={handleMouseMove}
       onMouseUp={handlePointerUp}
       onMouseLeave={handlePointerUp}
       onTouchMove={handlePointerMove}
@@ -122,44 +287,18 @@ export function CanvasEditor({
           position: 'relative',
           overflow: 'hidden',
           touchAction: 'none',
+          cursor: cursorStyle,
         }}
-        onClick={handleCanvasClick}
       >
-        <img
-          src={imageUrl}
-          alt="Base image"
+        <canvas
+          ref={canvasRef}
+          onMouseDown={handleCanvasClick}
           style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'contain',
+            width: canvasSize.width,
+            height: canvasSize.height,
             display: 'block',
-            pointerEvents: 'none',
-            userSelect: 'none',
-            WebkitUserSelect: 'none',
           }}
-          draggable={false}
         />
-
-        {layers.map((layer) => (
-          <TextLayerComponent
-            key={layer.id}
-            layer={layer}
-            isSelected={layer.id === selectedLayerId}
-            imageWidth={imageWidth}
-            imageHeight={imageHeight}
-            canvasWidth={canvasSize.width}
-            canvasHeight={canvasSize.height}
-            onSelect={onSelectLayer}
-            onStartDrag={(id, clientX, clientY) => {
-              if (!containerRef.current) return;
-              onStartDrag(id, clientX, clientY, containerRef.current.getBoundingClientRect());
-            }}
-            onStartResize={(id, handle, clientX, clientY) => {
-              if (!containerRef.current) return;
-              onStartResize(id, handle, clientX, clientY, containerRef.current.getBoundingClientRect());
-            }}
-          />
-        ))}
       </div>
     </div>
   );
