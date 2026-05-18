@@ -51,6 +51,11 @@ function App() {
             img
           );
         };
+        img.onerror = () => {
+          // Освобождаем URL при ошибке загрузки изображения
+          URL.revokeObjectURL(imageUrl);
+          console.error('Failed to load project image');
+        };
         img.src = imageUrl;
 
         setCurrentProjectId(record.id);
@@ -329,7 +334,6 @@ function App() {
                   onStartResize={state.startResize}
                   onDoResize={state.doResize}
                   onEndResize={state.endResize}
-                  onUpdateLayer={state.updateLayer}
                 />
               )}
             </div>

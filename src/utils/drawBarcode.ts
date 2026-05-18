@@ -2,14 +2,62 @@ import JsBarcode from 'jsbarcode';
 import type { BarcodeOptions } from '../types';
 
 /**
- * Очищает значение EAN-13: оставляет только цифры, обрезает/дополняет до 13 символов.
+ * Вычисляет контрольную цифру для EAN-13 по стандартному алгоритму.
+ * Принимает 12 цифр, возвращает 13-ю (контрольную) цифру.
+ */
+function calculateEan13CheckDigit(digits: string): number {
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    const digit = parseInt(digits[i], 10);
+    // Нечётные позиции (1,3,5...) — коэффициент 1, чётные — коэффициент 3
+    sum += (i % 2 === 0) ? digit : digit * 3;
+  }
+  const check = (10 - (sum % 10)) % 10;
+  return check;
+}
+
+/**
+ * Проверяет и исправляет значение EAN-13.
+ *
+ * Правила:
+ *  - Если цифр < 12 — выбрасываем ошибку (недостаточно данных)
+ *  - Если цифр = 12 — вычисляем контрольную сумму (13-ю цифру)
+ *  - Если цифр = 13 — проверяем контрольную сумму
+ *  - Если цифр > 13 — обрезаем до 13 и проверяем
+ *
+ * Возвращает валидный 13-символьный EAN-13 код.
  */
 function sanitizeEan13(value: string): string {
   const digits = value.replace(/\D/g, '');
-  if (digits.length < 13) {
-    return digits.padStart(13, '0');
+
+  if (digits.length < 12) {
+    throw new Error(`Слишком мало цифр для EAN-13: ${digits.length} (нужно минимум 12)`);
   }
-  return digits.slice(0, 13);
+
+  if (digits.length === 12) {
+    // Вычисляем контрольную цифру
+    const checkDigit = calculateEan13CheckDigit(digits);
+    return digits + checkDigit;
+  }
+
+  if (digits.length === 13) {
+    // Проверяем контрольную цифру
+    const checkDigit = calculateEan13CheckDigit(digits.slice(0, 12));
+    const actualCheck = parseInt(digits[12], 10);
+    if (checkDigit !== actualCheck) {
+      throw new Error(`Неверная контрольная сумма EAN-13: ожидается ${checkDigit}, получено ${actualCheck}`);
+    }
+    return digits;
+  }
+
+  // Больше 13 цифр — обрезаем до 13 и проверяем
+  const truncated = digits.slice(0, 13);
+  const checkDigit = calculateEan13CheckDigit(truncated.slice(0, 12));
+  const actualCheck = parseInt(truncated[12], 10);
+  if (checkDigit !== actualCheck) {
+    throw new Error(`Неверная контрольная сумма EAN-13 после обрезания: ожидается ${checkDigit}, получено ${actualCheck}`);
+  }
+  return truncated;
 }
 
 /**
@@ -85,13 +133,14 @@ export function drawBarcodeOnCanvas(
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(tempCanvas, drawX, drawY, drawW, drawH);
     ctx.imageSmoothingEnabled = prevSmoothing;
-  } catch {
+  } catch (err) {
     ctx.save();
     ctx.fillStyle = '#ff0000';
     ctx.font = `${Math.min(14, height * 0.3)}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`Ошибка EAN13: ${value}`, x + width / 2, y + height / 2);
+    const message = err instanceof Error ? err.message : String(err);
+    ctx.fillText(`Ошибка EAN13: ${message}`, x + width / 2, y + height / 2);
     ctx.restore();
   }
 }

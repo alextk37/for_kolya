@@ -450,7 +450,10 @@ body {
 .dropzone::before {
   content: '';
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   background: var(--gold-gradient-subtle);
   opacity: 0;
   transition: opacity var(--transition-base);
@@ -554,7 +557,10 @@ body {
 .btn::before {
   content: '';
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   background: var(--gold-gradient-subtle);
   opacity: 0;
   transition: opacity var(--transition-fast);
@@ -872,6 +878,11 @@ body {
   border-radius: 3px;
 }
 
+.prop-group input[type='color']::-moz-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
 /* ============================================
    CSV Preview
    ============================================ */
@@ -1036,7 +1047,10 @@ body {
 .progress-bar__fill::after {
   content: '';
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
   animation: progressShimmer 1.5s ease-in-out infinite;
 }
@@ -1341,7 +1355,10 @@ body {
 .project-selector__main-btn::before {
   content: '';
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   opacity: 0;
   transition: opacity var(--transition-fast);
   pointer-events: none;
@@ -1484,7 +1501,10 @@ body {
 .project-selector__card::before {
   content: '';
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   background: linear-gradient(135deg, var(--gold-gradient-subtle), transparent 60%);
   opacity: 0;
   transition: opacity var(--transition-fast);
@@ -1730,13 +1750,17 @@ body {
    ============================================ */
 .modal-overlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   animation: overlayIn 0.15s ease;
 }
 
@@ -1891,7 +1915,7 @@ body {
   cursor: pointer;
 }
 
-.modal__radio:has(input:checked) {
+.modal__radio--checked {
   border-color: var(--gold);
   background: var(--gold-glow);
 }

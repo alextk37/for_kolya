@@ -37,8 +37,23 @@ export function ProjectSelector({ onSelectProject, onCreateNew }: ProjectSelecto
     }
   }, []);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { refresh(); }, []);
+  // Загружаем проекты при монтировании
+  useEffect(() => {
+    let cancelled = false;
+    listProjects()
+      .then((list) => {
+        if (cancelled) return;
+        list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        setProjects(list);
+      })
+      .catch((err) => {
+        if (!cancelled) console.error('Failed to load projects:', err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleDelete = useCallback(
     async (id: string, e: React.MouseEvent) => {

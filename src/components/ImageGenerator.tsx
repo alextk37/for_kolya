@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import JSZip from 'jszip';
 import type { TextLayer, CsvData } from '../types';
 import { drawBarcodeOnCanvas } from '../utils/drawBarcode';
@@ -31,8 +31,35 @@ export function ImageGenerator({
   const [downloadUrls, setDownloadUrls] = useState<string[]>([]);
   const [isZipping, setIsZipping] = useState(false);
   const blobCache = useRef<Blob[]>([]);
+  const urlsRef = useRef<string[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Cleanup всех blob URL при размонтировании компонента
+  useEffect(() => {
+    const currentUrls = urlsRef.current;
+    return () => {
+      for (const url of currentUrls) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, []);
+
+  const cancelGeneration = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    onGenerationComplete();
+  }, [onGenerationComplete]);
 
   const generateImages = useCallback(async () => {
+    // Отменяем предыдущую генерацию, если она ещё идёт
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    abortRef.current = abortController;
+
     onStartGeneration();
     const urls: string[] = [];
     const blobs: Blob[] = [];
@@ -40,15 +67,32 @@ export function ImageGenerator({
     const baseImage = await loadImage(imageUrl);
 
     for (let rowIndex = 0; rowIndex < csvData.rows.length; rowIndex++) {
+      // Проверка отмены генерации
+      if (abortController.signal.aborted) {
+        console.log('Генерация отменена пользователем');
+        // Освобождаем уже созданные URL
+        for (const url of urls) {
+          URL.revokeObjectURL(url);
+        }
+        return;
+      }
+
       const row = csvData.rows[rowIndex];
 
       const canvas = document.createElement('canvas');
       canvas.width = imageWidth;
       canvas.height = imageHeight;
-      const ctx = canvas.getContext('2d')!;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Не удалось получить 2D контекст canvas');
+      }
 
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
+      // imageSmoothingQuality не поддерживается в некоторых браузерах (Safari < 16.4, Firefox < 109)
+      if ('imageSmoothingQuality' in ctx) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (ctx as any).imageSmoothingQuality = 'high';
+      }
       ctx.drawImage(baseImage, 0, 0, imageWidth, imageHeight);
 
       for (const layer of layers) {
@@ -158,9 +202,15 @@ export function ImageGenerator({
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
+    // Освобождаем старые blob URL и очищаем кэш перед заменой
+    for (const oldUrl of urlsRef.current) {
+      URL.revokeObjectURL(oldUrl);
+    }
+    urlsRef.current = urls;
     blobCache.current = blobs;
     setDownloadUrls(urls);
     onGenerationComplete();
+    abortRef.current = null;
   }, [imageUrl, imageWidth, imageHeight, layers, csvData, onStartGeneration, onGenerationProgress, onGenerationComplete]);
 
   const downloadAllAsZip = useCallback(async () => {
@@ -182,7 +232,10 @@ export function ImageGenerator({
     const a = document.createElement('a');
     a.href = zipUrl;
     a.download = 'generated-images.zip';
+    a.style.display = 'none';
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
 
     URL.revokeObjectURL(zipUrl);
     setIsZipping(false);
@@ -193,7 +246,10 @@ export function ImageGenerator({
       const a = document.createElement('a');
       a.href = url;
       a.download = `generated-${index + 1}.png`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
     },
     []
   );
@@ -240,6 +296,13 @@ export function ImageGenerator({
             <div className="progress-bar__fill" style={{ width: `${progressPercent}%` }} />
           </div>
           <p className="progress-text">{progressPercent}%</p>
+          <button
+            className="btn btn--small btn--ghost"
+            onClick={cancelGeneration}
+            style={{ width: '100%', marginTop: '8px' }}
+          >
+            ✕ Отменить генерацию
+          </button>
         </div>
       )}
 
@@ -289,8 +352,11 @@ export function ImageGenerator({
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    // Устанавливаем crossOrigin для предотвращения tainted canvas в Яндекс Браузере
-    img.crossOrigin = 'anonymous';
+    // Устанавливаем crossOrigin только для HTTP(S) URL, не для blob:
+    // blob URL не поддерживают crossOrigin и могут вызвать ошибку в некоторых браузерах
+    if (src.startsWith('http')) {
+      img.crossOrigin = 'anonymous';
+    }
     img.onload = () => resolve(img);
     img.onerror = reject;
     img.src = src;
@@ -353,7 +419,8 @@ function fitFontSize(
     ctx.font = buildFontString(fontStyle, size, fontFamily);
     const lines = wrapWords(ctx, text, availW);
     const totalH = lines.length * size * 1.3;
-    const maxW = Math.max(...lines.map((l) => ctx.measureText(l).width));
+    // Используем reduce вместо Math.max(...spread) для избежания Stack Overflow на больших массивах
+    const maxW = lines.reduce((max, l) => Math.max(max, ctx.measureText(l).width), 0);
 
     if (maxW <= availW && totalH <= availH) {
       return size;

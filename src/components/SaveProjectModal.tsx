@@ -138,7 +138,7 @@ export function SaveProjectModal({
           <div className="modal__field">
             <label className="modal__label">Формат изображения</label>
             <div className="modal__radio-group">
-              <label className="modal__radio">
+              <label className={`modal__radio${imageFormat === 'png' ? ' modal__radio--checked' : ''}`}>
                 <input
                   type="radio"
                   name="imageFormat"
@@ -148,7 +148,7 @@ export function SaveProjectModal({
                 />
                 <span>PNG (без потерь)</span>
               </label>
-              <label className="modal__radio">
+              <label className={`modal__radio${imageFormat === 'jpg' ? ' modal__radio--checked' : ''}`}>
                 <input
                   type="radio"
                   name="imageFormat"

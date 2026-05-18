@@ -12,7 +12,15 @@ interface TextLayerComponentProps {
   onSelect: (id: string) => void;
   onStartDrag: (id: string, clientX: number, clientY: number) => void;
   onStartResize: (id: string, handle: string, clientX: number, clientY: number) => void;
-  onUpdate: (id: string, updates: Partial<TextLayer>) => void;
+}
+
+/** Извлекает координаты из Mouse или Touch события */
+function getClientCoords(e: React.MouseEvent | React.TouchEvent): { clientX: number; clientY: number } {
+  if ('touches' in e) {
+    const touch = e.touches[0] ?? e.changedTouches[0];
+    return { clientX: touch.clientX, clientY: touch.clientY };
+  }
+  return { clientX: e.clientX, clientY: e.clientY };
 }
 
 export function TextLayerComponent({
@@ -25,7 +33,6 @@ export function TextLayerComponent({
   onSelect,
   onStartDrag,
   onStartResize,
-  onUpdate,
 }: TextLayerComponentProps) {
   const layerRef = useRef<HTMLDivElement>(null);
   const barcodeCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -90,6 +97,8 @@ export function TextLayerComponent({
     borderRadius: '3px',
     padding: '4px 6px',
     userSelect: 'none',
+    WebkitUserSelect: 'none',
+    touchAction: 'none',
     zIndex: isSelected ? 10 : 1,
     boxShadow: isSelected
       ? '0 0 16px rgba(212, 175, 55, 0.15), inset 0 0 16px rgba(212, 175, 55, 0.03)'
@@ -99,59 +108,32 @@ export function TextLayerComponent({
     transformOrigin: 'center center',
   };
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+  const handlePointerDown = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
       e.stopPropagation();
       e.preventDefault();
+      const { clientX, clientY } = getClientCoords(e);
       onSelect(layer.id);
-      onStartDrag(layer.id, e.clientX, e.clientY);
+      onStartDrag(layer.id, clientX, clientY);
     },
     [layer.id, onSelect, onStartDrag]
   );
 
-  const handleResizeMouseDown = useCallback(
-    (e: React.MouseEvent, handle: string) => {
+  const handleResizePointerDown = useCallback(
+    (e: React.MouseEvent | React.TouchEvent, handle: string) => {
       e.stopPropagation();
       e.preventDefault();
+      const { clientX, clientY } = getClientCoords(e);
       onSelect(layer.id);
-      onStartResize(layer.id, handle, e.clientX, e.clientY);
+      onStartResize(layer.id, handle, clientX, clientY);
     },
     [layer.id, onSelect, onStartResize]
   );
 
+  // Двойной клик — выделяет слой (все настройки доступны в LayerPanel)
   const handleDoubleClick = useCallback(() => {
-    if (layer.isBarcode) {
-      const newWidth = prompt('Ширина полосы (1-10):', String(layer.barcodeOptions.width));
-      if (newWidth) onUpdate(layer.id, { barcodeOptions: { ...layer.barcodeOptions, width: parseInt(newWidth) || 1 } });
-
-      const newHeight = prompt('Высота штрихкода (10-200):', String(layer.barcodeOptions.height));
-      if (newHeight) onUpdate(layer.id, { barcodeOptions: { ...layer.barcodeOptions, height: parseInt(newHeight) || 40 } });
-
-      const newRotation = prompt('Поворот (градусы, 0-360):', String(layer.rotation));
-      if (newRotation) onUpdate(layer.id, { rotation: parseInt(newRotation) || 0 });
-      return;
-    }
-
-    const newColor = prompt('Цвет текста (hex, например #ff0000):', layer.color);
-    if (newColor) onUpdate(layer.id, { color: newColor });
-
-    const newFontSize = prompt('Размер шрифта:', String(layer.fontSize));
-    if (newFontSize) onUpdate(layer.id, { fontSize: parseInt(newFontSize) || 16 });
-
-    const newFontFamily = prompt('Шрифт:', layer.fontFamily);
-    if (newFontFamily) onUpdate(layer.id, { fontFamily: newFontFamily });
-
-    const newAlign = prompt('Выравнивание (left, center, right):', layer.textAlign);
-    if (newAlign && ['left', 'center', 'right'].includes(newAlign)) {
-      onUpdate(layer.id, { textAlign: newAlign as CanvasTextAlign });
-    }
-
-    const newStyle = prompt('Стиль (normal, bold, italic, bold italic):', layer.fontStyle);
-    if (newStyle) onUpdate(layer.id, { fontStyle: newStyle });
-
-    const newRotation = prompt('Поворот (градусы, 0-360):', String(layer.rotation));
-    if (newRotation) onUpdate(layer.id, { rotation: parseInt(newRotation) || 0 });
-  }, [layer, onUpdate]);
+    onSelect(layer.id);
+  }, [layer.id, onSelect]);
 
   const resizeHandles = ['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'];
 
@@ -159,13 +141,14 @@ export function TextLayerComponent({
     <div
       ref={layerRef}
       style={style}
-      onMouseDown={handleMouseDown}
+      onMouseDown={handlePointerDown}
+      onTouchStart={handlePointerDown}
       onDoubleClick={handleDoubleClick}
       className="text-layer"
       title={
         layer.isBarcode
-          ? `[ШТРИХКОД] ${layer.columnName} | Поворот: ${layer.rotation}° | Двойной клик для настроек`
-          : `${layer.columnName} | Поворот: ${layer.rotation}° | Двойной клик для настроек`
+          ? `[ШТРИХКОД] ${layer.columnName} | Поворот: ${layer.rotation}°`
+          : `${layer.columnName} | Поворот: ${layer.rotation}°`
       }
     >
       {layer.isBarcode ? (
@@ -205,7 +188,8 @@ export function TextLayerComponent({
           <div
             key={handle}
             className={`resize-handle resize-handle--${handle}`}
-            onMouseDown={(e) => handleResizeMouseDown(e, handle)}
+            onMouseDown={(e) => handleResizePointerDown(e, handle)}
+            onTouchStart={(e) => handleResizePointerDown(e, handle)}
           />
         ))}
     </div>

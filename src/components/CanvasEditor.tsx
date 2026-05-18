@@ -17,7 +17,15 @@ interface CanvasEditorProps {
   onStartResize: (id: string, handle: string, clientX: number, clientY: number, canvasRect: DOMRect) => void;
   onDoResize: (clientX: number, clientY: number, canvasRect: DOMRect) => void;
   onEndResize: () => void;
-  onUpdateLayer: (id: string, updates: Partial<TextLayer>) => void;
+}
+
+/** Извлекает координаты из Mouse или Touch события */
+function getClientCoords(e: React.MouseEvent | React.TouchEvent): { clientX: number; clientY: number } {
+  if ('touches' in e) {
+    const touch = e.touches[0] ?? e.changedTouches[0];
+    return { clientX: touch.clientX, clientY: touch.clientY };
+  }
+  return { clientX: e.clientX, clientY: e.clientY };
 }
 
 export function CanvasEditor({
@@ -35,7 +43,6 @@ export function CanvasEditor({
   onStartResize,
   onDoResize,
   onEndResize,
-  onUpdateLayer,
 }: CanvasEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [canvasSize, setCanvasSize] = React.useState({ width: 0, height: 0 });
@@ -66,22 +73,23 @@ export function CanvasEditor({
     return () => window.removeEventListener('resize', updateSize);
   }, [imageWidth, imageHeight]);
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
+  const handlePointerMove = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
+      const { clientX, clientY } = getClientCoords(e);
 
       if (isDragging) {
-        onDoDrag(e.clientX, e.clientY, rect);
+        onDoDrag(clientX, clientY, rect);
       }
       if (isResizing) {
-        onDoResize(e.clientX, e.clientY, rect);
+        onDoResize(clientX, clientY, rect);
       }
     },
     [isDragging, isResizing, onDoDrag, onDoResize]
   );
 
-  const handleMouseUp = useCallback(() => {
+  const handlePointerUp = useCallback(() => {
     if (isDragging) onEndDrag();
     if (isResizing) onEndResize();
   }, [isDragging, isResizing, onEndDrag, onEndResize]);
@@ -99,9 +107,11 @@ export function CanvasEditor({
   return (
     <div
       className="canvas-editor"
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onMouseMove={handlePointerMove}
+      onMouseUp={handlePointerUp}
+      onMouseLeave={handlePointerUp}
+      onTouchMove={handlePointerMove}
+      onTouchEnd={handlePointerUp}
     >
       <div
         ref={containerRef}
@@ -111,6 +121,7 @@ export function CanvasEditor({
           height: canvasSize.height,
           position: 'relative',
           overflow: 'hidden',
+          touchAction: 'none',
         }}
         onClick={handleCanvasClick}
       >
@@ -124,6 +135,7 @@ export function CanvasEditor({
             display: 'block',
             pointerEvents: 'none',
             userSelect: 'none',
+            WebkitUserSelect: 'none',
           }}
           draggable={false}
         />
@@ -146,7 +158,6 @@ export function CanvasEditor({
               if (!containerRef.current) return;
               onStartResize(id, handle, clientX, clientY, containerRef.current.getBoundingClientRect());
             }}
-            onUpdate={onUpdateLayer}
           />
         ))}
       </div>

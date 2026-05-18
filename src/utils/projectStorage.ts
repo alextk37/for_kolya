@@ -145,8 +145,34 @@ const FALLBACK_DB_NAME = 'for_kolya_projects_fallback';
 const FALLBACK_DB_VERSION = 1;
 const FALLBACK_STORE = 'projects_meta';
 
+/**
+ * Проверяет, доступна ли IndexedDB (может быть заблокирована в приватном режиме).
+ */
+function isIndexedDBAvailable(): boolean {
+  try {
+    if (typeof indexedDB === 'undefined') return false;
+    // Проверяем через открытие и закрытие тестовой БД
+    const request = indexedDB.open('__test_db__');
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      db.close();
+      indexedDB.deleteDatabase('__test_db__');
+    };
+    request.onerror = () => {
+      indexedDB.deleteDatabase('__test_db__');
+    };
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function openFallbackDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
+    if (!isIndexedDBAvailable()) {
+      reject(new Error('IndexedDB недоступна (возможно, приватный режим)'));
+      return;
+    }
     const request = indexedDB.open(FALLBACK_DB_NAME, FALLBACK_DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -213,20 +239,34 @@ async function fallbackDeleteManifest(id: string): Promise<void> {
 // ============================================================
 
 export async function listProjects(): Promise<ProjectManifest[]> {
+  // Сначала пробуем FSA без запроса разрешения (не показываем диалог выбора папки)
   if (isFileSystemAccessSupported()) {
-    return listProjectsFSA();
+    const fsaResult = await tryListProjectsFSA();
+    if (fsaResult) return fsaResult;
   }
   return listProjectsFallback();
 }
 
-async function listProjectsFSA(): Promise<ProjectManifest[]> {
-  let rootHandle: FileSystemDirectoryHandle;
-  try {
-    rootHandle = await getOrRequestRootHandle();
-  } catch {
-    return [];
-  }
+/**
+ * Пытается получить список проектов через FSA без показа диалога выбора папки.
+ * Возвращает null, если нет сохранённого доступа.
+ */
+async function tryListProjectsFSA(): Promise<ProjectManifest[] | null> {
+  const stored = await loadStoredHandle();
+  if (!stored) return null;
 
+  let permission: PermissionState;
+  try {
+    permission = await stored.queryPermission({ mode: 'readwrite' });
+  } catch {
+    return null;
+  }
+  if (permission !== 'granted') return null;
+
+  return listProjectsFromHandle(stored);
+}
+
+async function listProjectsFromHandle(rootHandle: FileSystemDirectoryHandle): Promise<ProjectManifest[]> {
   const manifests: ProjectManifest[] = [];
 
   for await (const [, entry] of rootHandle.entries()) {

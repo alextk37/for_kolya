@@ -37,6 +37,11 @@ export function useAppState() {
   const imageRef = useRef<HTMLImageElement | null>(null);
 
   const handleImageLoad = useCallback((file: File) => {
+    // Освобождаем предыдущий blob URL, если он был
+    if (imageUrl) {
+      URL.revokeObjectURL(imageUrl);
+    }
+
     const url = URL.createObjectURL(file);
     setImageUrl(url);
 
@@ -47,7 +52,7 @@ export function useAppState() {
       imageRef.current = img;
     };
     img.src = url;
-  }, []);
+  }, [imageUrl]);
 
   const handleCsvLoad = useCallback(async (file: File) => {
     try {
@@ -243,7 +248,10 @@ export function useAppState() {
       projectLayers: TextLayer[],
       img: HTMLImageElement
     ) => {
-      // Не revoke-им предыдущий imageUrl — он может быть переиспользован
+      // Освобождаем предыдущий blob URL перед заменой
+      if (imageUrl) {
+        URL.revokeObjectURL(imageUrl);
+      }
       setImageUrl(url);
       setImageSize(size);
       setCsvData(csv);
@@ -257,7 +265,7 @@ export function useAppState() {
       setGeneratedCount(0);
       imageRef.current = img;
     },
-    []
+    [imageUrl]
   );
 
   return {

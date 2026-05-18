@@ -65,7 +65,7 @@ export function LayerPanel({
               min={0}
               max={2000}
               value={selectedLayer.x}
-              onChange={(e) => onUpdateLayer(selectedLayer.id, { x: parseInt(e.target.value) })}
+              onChange={(e) => onUpdateLayer(selectedLayer.id, { x: parseInt(e.target.value, 10) })}
             />
           </div>
 
@@ -79,7 +79,7 @@ export function LayerPanel({
               min={0}
               max={2000}
               value={selectedLayer.y}
-              onChange={(e) => onUpdateLayer(selectedLayer.id, { y: parseInt(e.target.value) })}
+              onChange={(e) => onUpdateLayer(selectedLayer.id, { y: parseInt(e.target.value, 10) })}
             />
           </div>
 
@@ -94,7 +94,7 @@ export function LayerPanel({
                 max={2000}
                 value={Math.round(selectedLayer.width)}
                 onChange={(e) =>
-                  onUpdateLayer(selectedLayer.id, { width: parseInt(e.target.value) || 50 })
+                  onUpdateLayer(selectedLayer.id, { width: parseInt(e.target.value, 10) || 50 })
                 }
               />
             </div>
@@ -109,7 +109,7 @@ export function LayerPanel({
                 max={2000}
                 value={Math.round(selectedLayer.height)}
                 onChange={(e) =>
-                  onUpdateLayer(selectedLayer.id, { height: parseInt(e.target.value) || 20 })
+                  onUpdateLayer(selectedLayer.id, { height: parseInt(e.target.value, 10) || 20 })
                 }
               />
             </div>
@@ -152,7 +152,7 @@ export function LayerPanel({
                       onUpdateLayer(selectedLayer.id, {
                         barcodeOptions: {
                           ...selectedLayer.barcodeOptions,
-                          height: parseInt(e.target.value) || 40,
+                          height: parseInt(e.target.value, 10) || 40,
                         },
                       })
                     }
@@ -212,7 +212,7 @@ export function LayerPanel({
                       onUpdateLayer(selectedLayer.id, {
                         barcodeOptions: {
                           ...selectedLayer.barcodeOptions,
-                          fontSize: parseInt(e.target.value) || 12,
+                          fontSize: parseInt(e.target.value, 10) || 12,
                         },
                       })
                     }
@@ -232,7 +232,7 @@ export function LayerPanel({
                       onUpdateLayer(selectedLayer.id, {
                         barcodeOptions: {
                           ...selectedLayer.barcodeOptions,
-                          margin: parseInt(e.target.value) || 4,
+                          margin: parseInt(e.target.value, 10) || 4,
                         },
                       })
                     }
@@ -271,7 +271,7 @@ export function LayerPanel({
                     max={200}
                     value={selectedLayer.fontSize}
                     onChange={(e) =>
-                      onUpdateLayer(selectedLayer.id, { fontSize: parseInt(e.target.value) || 16 })
+                      onUpdateLayer(selectedLayer.id, { fontSize: parseInt(e.target.value, 10) || 16 })
                     }
                   />
                 </div>
@@ -385,7 +385,7 @@ export function LayerPanel({
               max={360}
               value={selectedLayer.rotation}
               onChange={(e) =>
-                onUpdateLayer(selectedLayer.id, { rotation: parseInt(e.target.value) })
+                onUpdateLayer(selectedLayer.id, { rotation: parseInt(e.target.value, 10) })
               }
             />
           </div>
