@@ -46,7 +46,11 @@ export function useAppState() {
     setImageUrl(url);
 
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    // crossOrigin устанавливаем только для HTTP(S) URL — blob URL не поддерживают
+    // crossOrigin, и их установка вызывает tainted canvas на macOS (Safari/WebKit)
+    if (url.startsWith('http')) {
+      img.crossOrigin = 'anonymous';
+    }
     img.onload = () => {
       setImageSize({ width: img.naturalWidth, height: img.naturalHeight });
       imageRef.current = img;

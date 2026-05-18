@@ -41,7 +41,11 @@ function App() {
         // Восстанавливаем изображение из blob
         const imageUrl = URL.createObjectURL(record.imageBlob);
         const img = new Image();
-        img.crossOrigin = 'anonymous';
+        // crossOrigin устанавливаем только для HTTP(S) URL — blob URL не поддерживают
+        // crossOrigin, и их установка вызывает tainted canvas на macOS (Safari/WebKit)
+        if (imageUrl.startsWith('http')) {
+          img.crossOrigin = 'anonymous';
+        }
         img.onload = () => {
           state.loadFromProject(
             imageUrl,
