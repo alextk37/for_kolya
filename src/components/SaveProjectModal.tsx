@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { isFileSystemAccessSupported } from '../utils/projectStorage';
 
 interface SaveProjectModalProps {
   open: boolean;
@@ -26,7 +25,9 @@ export function SaveProjectModal({
   const [folderName, setFolderName] = useState<string>('');
   const [imageFormat, setImageFormat] = useState<'png' | 'jpg'>('png');
 
-  const fsaSupported = isFileSystemAccessSupported();
+  // FSA поддерживается в Chrome/Edge, но НЕ в Electron (там showDirectoryPicker зависает)
+  const isElectron = !!window.electronAPI?.isElectron;
+  const fsaSupported = !isElectron && 'showDirectoryPicker' in window;
 
   // Фокус на поле имени при открытии
   useEffect(() => {

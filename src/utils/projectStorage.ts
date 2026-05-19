@@ -1,3 +1,4 @@
+import JSZip from 'jszip';
 import type { ProjectManifest, ProjectRecord } from '../types';
 
 /**
@@ -145,34 +146,9 @@ const FALLBACK_DB_NAME = 'for_kolya_projects_fallback';
 const FALLBACK_DB_VERSION = 1;
 const FALLBACK_STORE = 'projects_meta';
 
-/**
- * Проверяет, доступна ли IndexedDB (может быть заблокирована в приватном режиме).
- */
-function isIndexedDBAvailable(): boolean {
-  try {
-    if (typeof indexedDB === 'undefined') return false;
-    // Проверяем через открытие и закрытие тестовой БД
-    const request = indexedDB.open('__test_db__');
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      db.close();
-      indexedDB.deleteDatabase('__test_db__');
-    };
-    request.onerror = () => {
-      indexedDB.deleteDatabase('__test_db__');
-    };
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function openFallbackDb(): Promise<IDBDatabase> {
+async function openFallbackDb(): Promise<IDBDatabase> {
+  // Вместо этого просто пытаемся открыть реальную БД и обрабатываем ошибки.
   return new Promise((resolve, reject) => {
-    if (!isIndexedDBAvailable()) {
-      reject(new Error('IndexedDB недоступна (возможно, приватный режим)'));
-      return;
-    }
     const request = indexedDB.open(FALLBACK_DB_NAME, FALLBACK_DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -239,12 +215,24 @@ async function fallbackDeleteManifest(id: string): Promise<void> {
 // ============================================================
 
 export async function listProjects(): Promise<ProjectManifest[]> {
-  // Сначала пробуем FSA без запроса разрешения (не показываем диалог выбора папки)
+  // Всегда загружаем fallback-проекты (IndexedDB)
+  const fallbackResult = await listProjectsFallback();
+
+  // Если FSA поддерживается — пробуем получить и FSA-проекты
   if (isFileSystemAccessSupported()) {
     const fsaResult = await tryListProjectsFSA();
-    if (fsaResult) return fsaResult;
+    if (fsaResult) {
+      // Объединяем, убирая дубликаты по id (приоритет FSA)
+      const fallbackIds = new Set(fsaResult.map((p) => p.id));
+      const uniqueFallback = fallbackResult.filter((p) => !fallbackIds.has(p.id));
+      const merged = [...fsaResult, ...uniqueFallback];
+      merged.sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+      return merged;
+    }
   }
-  return listProjectsFallback();
+  return fallbackResult;
 }
 
 /**
@@ -305,19 +293,28 @@ async function listProjectsFallback(): Promise<ProjectManifest[]> {
 // ============================================================
 
 export async function loadProject(id: string): Promise<ProjectRecord | null> {
+  // Сначала пробуем FSA, затем fallback — ищем в обоих хранилищах
   if (isFileSystemAccessSupported()) {
-    return loadProjectFSA(id);
+    const fsaResult = await loadProjectFSA(id);
+    if (fsaResult) return fsaResult;
   }
   return loadProjectFallback(id);
 }
 
 async function loadProjectFSA(id: string): Promise<ProjectRecord | null> {
-  let rootHandle: FileSystemDirectoryHandle;
+  // Используем только сохранённый handle — НЕ показываем диалог выбора папки
+  const stored = await loadStoredHandle();
+  if (!stored) return null;
+
+  let permission: PermissionState;
   try {
-    rootHandle = await getOrRequestRootHandle();
+    permission = await stored.queryPermission({ mode: 'readwrite' });
   } catch {
     return null;
   }
+  if (permission !== 'granted') return null;
+
+  const rootHandle = stored;
 
   for await (const [, entry] of rootHandle.entries()) {
     if (entry.kind !== 'directory') continue;
@@ -418,13 +415,21 @@ async function loadProjectFallback(id: string): Promise<ProjectRecord | null> {
 export interface SaveProjectOptions {
   folderHandle?: FileSystemDirectoryHandle | null;
   imageFormat?: 'png' | 'jpg';
+  /** Принудительно использовать fallback-хранилище (IndexedDB) вместо FSA.
+   * Полезно при импорте из ZIP, когда нужно сохранить без диалога выбора папки. */
+  forceFallback?: boolean;
 }
 
 export async function saveProject(
   record: ProjectRecord,
   options?: SaveProjectOptions
 ): Promise<void> {
-  if (isFileSystemAccessSupported()) {
+  // В Electron — всегда используем fallback (IndexedDB),
+  // т.к. showDirectoryPicker() может зависать
+  if (window.electronAPI?.isElectron && !options?.folderHandle) {
+    return saveProjectFallback(record);
+  }
+  if (!options?.forceFallback && isFileSystemAccessSupported()) {
     return saveProjectFSA(record, options);
   }
   return saveProjectFallback(record);
@@ -491,14 +496,28 @@ async function saveProjectFallback(record: ProjectRecord): Promise<void> {
 // ============================================================
 
 export async function deleteProject(id: string): Promise<void> {
+  // Пробуем FSA (без диалога), затем fallback
   if (isFileSystemAccessSupported()) {
-    return deleteProjectFSA(id);
+    const deleted = await deleteProjectFSA(id);
+    if (deleted) return;
   }
   return deleteProjectFallback(id);
 }
 
-async function deleteProjectFSA(id: string): Promise<void> {
-  const rootHandle = await getOrRequestRootHandle();
+async function deleteProjectFSA(id: string): Promise<boolean> {
+  // Используем только сохранённый handle — НЕ показываем диалог выбора папки
+  const stored = await loadStoredHandle();
+  if (!stored) return false;
+
+  let permission: PermissionState;
+  try {
+    permission = await stored.queryPermission({ mode: 'readwrite' });
+  } catch {
+    return false;
+  }
+  if (permission !== 'granted') return false;
+
+  const rootHandle = stored;
 
   for await (const [, entry] of rootHandle.entries()) {
     if (entry.kind !== 'directory') continue;
@@ -514,11 +533,12 @@ async function deleteProjectFSA(id: string): Promise<void> {
         await dirHandle.removeEntry(fileName);
       }
       await rootHandle.removeEntry(entry.name);
-      return;
+      return true;
     } catch {
       continue;
     }
   }
+  return false;
 }
 
 async function deleteProjectFallback(id: string): Promise<void> {
@@ -539,12 +559,11 @@ export async function resetRootHandle(): Promise<void> {
 // ============================================================
 
 /**
- * Скачивает проект как ZIP-архив (для Firefox/Safari).
- * Используем CompressionStream если доступен, иначе JSZip.
+ * Скачивает проект как ZIP-архив.
+ * В Electron — через нативный диалог сохранения (IPC).
+ * В браузере — через создание ссылки <a>.
  */
 export async function downloadProjectAsZip(record: ProjectRecord): Promise<void> {
-  // Динамический импорт JSZip
-  const JSZip = (await import('jszip')).default;
   const zip = new JSZip();
 
   const { imageBlob, ...manifest } = record;
@@ -553,8 +572,22 @@ export async function downloadProjectAsZip(record: ProjectRecord): Promise<void>
   zip.file('image.png', imageBlob);
 
   const blob = await zip.generateAsync({ type: 'blob' });
-  const url = URL.createObjectURL(blob);
 
+  // В Electron — используем нативный диалог сохранения
+  if (window.electronAPI?.isElectron) {
+    const arrayBuffer = await blob.arrayBuffer();
+    const saved = await window.electronAPI.saveFileDialog({
+      fileName: `${sanitizeFileName(record.name)}.zip`,
+      data: arrayBuffer,
+    });
+    if (!saved) {
+      console.log('[downloadProjectAsZip] Пользователь отменил сохранение');
+    }
+    return;
+  }
+
+  // В браузере — скачивание через <a>
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = `${sanitizeFileName(record.name)}.zip`;
@@ -570,22 +603,45 @@ export async function downloadProjectAsZip(record: ProjectRecord): Promise<void>
  */
 export async function importProjectFromZip(file: File): Promise<ProjectRecord | null> {
   try {
-    const JSZip = (await import('jszip')).default;
     const zip = await JSZip.loadAsync(file);
 
     const manifestFile = zip.file('manifest.json');
-    if (!manifestFile) return null;
+    if (!manifestFile) {
+      console.error('[importProjectFromZip] manifest.json не найден в архиве. Файлы:', Object.keys(zip.files));
+      return null;
+    }
 
     const manifestText = await manifestFile.async('string');
-    const manifest: ProjectManifest = JSON.parse(manifestText);
+    let manifest: ProjectManifest;
+    try {
+      manifest = JSON.parse(manifestText);
+    } catch (parseErr) {
+      console.error('[importProjectFromZip] Ошибка парсинга manifest.json:', parseErr);
+      return null;
+    }
+
+    // Проверяем обязательные поля манифеста
+    if (!manifest.id || !manifest.name || !manifest.csvData) {
+      console.error('[importProjectFromZip] Манифест缺少 обязательные поля:', {
+        hasId: !!manifest.id,
+        hasName: !!manifest.name,
+        hasCsvData: !!manifest.csvData,
+      });
+      return null;
+    }
 
     const imageFile = zip.file('image.png') || zip.file('image.jpg');
-    if (!imageFile) return null;
+    if (!imageFile) {
+      console.error('[importProjectFromZip] Файл изображения не найден в архиве. Файлы:', Object.keys(zip.files));
+      return null;
+    }
 
     const imageBlob = await imageFile.async('blob');
+    console.log('[importProjectFromZip] Проект успешно импортирован:', manifest.name, manifest.id);
 
     return { ...manifest, imageBlob };
-  } catch {
+  } catch (err) {
+    console.error('[importProjectFromZip] Неожиданная ошибка:', err);
     return null;
   }
 }

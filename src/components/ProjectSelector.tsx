@@ -3,10 +3,10 @@ import type { ProjectManifest } from '../types';
 import {
   listProjects,
   deleteProject,
-  isFileSystemAccessSupported,
   downloadProjectAsZip,
   importProjectFromZip,
   loadProject,
+  saveProject,
 } from '../utils/projectStorage';
 
 interface ProjectSelectorProps {
@@ -21,8 +21,6 @@ export function ProjectSelector({ onSelectProject, onCreateNew }: ProjectSelecto
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [showProjectList, setShowProjectList] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
-
-  const fsaSupported = isFileSystemAccessSupported();
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -95,15 +93,16 @@ export function ProjectSelector({ onSelectProject, onCreateNew }: ProjectSelecto
       try {
         const record = await importProjectFromZip(file);
         if (record) {
-          const { saveProject } = await import('../utils/projectStorage');
-          await saveProject(record);
-          refresh();
+          await saveProject(record, { forceFallback: true });
+          await refresh();
+          console.log('[handleImport] Проект успешно импортирован и сохранён:', record.name);
         } else {
-          alert('Не удалось загрузить проект: неверный формат ZIP-архива');
+          console.error('[handleImport] importProjectFromZip вернул null');
+          alert('Не удалось загрузить проект: неверный формат ZIP-архива.\nУбедитесь, что архив содержит manifest.json и image.png');
         }
       } catch (err) {
-        console.error('Failed to import project:', err);
-        alert('Ошибка при импорте проекта');
+        console.error('[handleImport] Ошибка при импорте проекта:', err);
+        alert(`Ошибка при импорте проекта: ${err instanceof Error ? err.message : String(err)}`);
       }
 
       if (importInputRef.current) {
@@ -211,16 +210,14 @@ export function ProjectSelector({ onSelectProject, onCreateNew }: ProjectSelecto
                   </span>
                 </div>
                 <div className="project-selector__card-actions">
-                  {!fsaSupported && (
-                    <button
-                      className="btn btn--ghost project-selector__export-btn"
-                      title="Скачать ZIP-архив проекта"
-                      onClick={(e) => handleExport(proj.id, e)}
-                      disabled={exportingId === proj.id}
-                    >
-                      {exportingId === proj.id ? '⏳' : '⬇'}
-                    </button>
-                  )}
+                  <button
+                    className="btn btn--ghost project-selector__export-btn"
+                    title="Скачать ZIP-архив проекта"
+                    onClick={(e) => handleExport(proj.id, e)}
+                    disabled={exportingId === proj.id}
+                  >
+                    {exportingId === proj.id ? '⏳' : '⬇'}
+                  </button>
 
                   {confirmDeleteId === proj.id ? (
                     <div className="project-selector__confirm">
@@ -269,24 +266,22 @@ export function ProjectSelector({ onSelectProject, onCreateNew }: ProjectSelecto
           </div>
         )}
 
-        {/* Импорт проекта (для Firefox/Safari) */}
-        {!fsaSupported && (
-          <div className="project-selector__import-row">
-            <button
-              className="btn btn--ghost btn--small"
-              onClick={() => importInputRef.current?.click()}
-            >
-              📥 Импорт проекта из ZIP
-            </button>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".zip"
-              style={{ display: 'none' }}
-              onChange={handleImport}
-            />
-          </div>
-        )}
+        {/* Импорт проекта из ZIP — доступен всегда (в Electron и браузерах без FSA) */}
+        <div className="project-selector__import-row">
+          <button
+            className="btn btn--ghost btn--small"
+            onClick={() => importInputRef.current?.click()}
+          >
+            📥 Импорт проекта из ZIP
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".zip"
+            style={{ display: 'none' }}
+            onChange={handleImport}
+          />
+        </div>
       </div>
     </main>
   );

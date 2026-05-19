@@ -1,16 +1,27 @@
 {
   "name": "for_kolya",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "1.0.0",
+  "description": "Генератор изображений с текстовыми слоями и штрихкодами",
+  "author": {
+    "name": "alextk37",
+    "email": "alextk37@users.noreply.github.com"
+  },
   "homepage": "https://alextk37.github.io/for_kolya",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "electron:dev": "ELECTRON=true vite",
+    "electron:build": "ELECTRON=true tsc -b && ELECTRON=true vite build && electron-builder",
+    "electron:preview": "ELECTRON=true vite build && electron .",
+    "electron:build:mac": "ELECTRON=true tsc -b && ELECTRON=true vite build && electron-builder --mac",
+    "electron:build:linux": "ELECTRON=true tsc -b && ELECTRON=true vite build && electron-builder --linux",
+    "electron:build:all": "ELECTRON=true tsc -b && ELECTRON=true vite build && electron-builder --mac --linux"
   },
   "dependencies": {
     "jsbarcode": "^3.12.3",
@@ -27,6 +38,9 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "electron": "^42.0.1",
+    "electron-builder": "^26.10.0",
+    "esbuild": "^0.28.0",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
@@ -34,6 +48,51 @@
     "globals": "^17.6.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
-    "vite": "^8.0.12"
+    "vite": "^8.0.12",
+    "vite-plugin-electron": "^0.29.1",
+    "vite-plugin-electron-renderer": "^0.14.7"
+  },
+  "build": {
+    "appId": "com.for-kolya.app",
+    "productName": "Для Коли",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": ["arm64"]
+        }
+      ],
+      "category": "public.app-category.graphics-design",
+      "icon": "build/icon.png",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        }
+      ],
+      "category": "Graphics",
+      "icon": "build/icon.png",
+      "executableName": "for-kolya",
+      "executableArgs": ["--no-sandbox", "--disable-setuid-sandbox"]
+    },
+    "extraResources": [
+      {
+        "from": "public",
+        "to": "public"
+      }
+    ]
   }
 }

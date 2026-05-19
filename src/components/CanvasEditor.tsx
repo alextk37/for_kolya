@@ -57,6 +57,7 @@ export function CanvasEditor({
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const imageRef = useRef<HTMLImageElement | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [fontsLoaded, setFontsLoaded] = useState(false);
 
   // Загрузка изображения для Canvas-рендеринга
   useEffect(() => {
@@ -74,6 +75,13 @@ export function CanvasEditor({
     };
     img.src = imageUrl;
   }, [imageUrl]);
+
+  // Ожидание загрузки веб-шрифтов перед рендерингом Canvas
+  useEffect(() => {
+    document.fonts.ready.then(() => {
+      setFontsLoaded(true);
+    });
+  }, []);
 
   // Calculate canvas size to fit the viewport while maintaining aspect ratio
   useEffect(() => {
@@ -93,7 +101,7 @@ export function CanvasEditor({
         width = height * aspectRatio;
       }
 
-      setCanvasSize({ width: Math.floor(width), height: Math.floor(height) });
+      setCanvasSize({ width: Math.round(width), height: Math.round(height) });
     };
 
     updateSize();
@@ -103,7 +111,7 @@ export function CanvasEditor({
 
   // Рендерим сцену на Canvas при каждом изменении
   useEffect(() => {
-    if (!canvasRef.current || !imageRef.current || !imageLoaded) return;
+    if (!canvasRef.current || !imageRef.current || !imageLoaded || !fontsLoaded) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -137,7 +145,7 @@ export function CanvasEditor({
     });
 
     ctx.restore();
-  }, [canvasSize, imageWidth, imageHeight, layers, csvData, previewRowIndex, selectedLayerId, imageLoaded]);
+  }, [canvasSize, imageWidth, imageHeight, layers, csvData, previewRowIndex, selectedLayerId, imageLoaded, fontsLoaded]);
 
   // Преобразование координат мыши в координаты изображения
   const clientToImageCoords = useCallback(

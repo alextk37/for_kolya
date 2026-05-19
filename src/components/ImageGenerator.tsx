@@ -98,6 +98,9 @@ export function ImageGenerator({
     const blobs: Blob[] = [];
     const errors: GenerationError[] = [];
 
+    // Ожидаем загрузки веб-шрифтов для корректных метрик measureText
+    await document.fonts.ready;
+
     const baseImage = imageRef.current;
     if (!baseImage) {
       onGenerationComplete();
@@ -125,6 +128,9 @@ export function ImageGenerator({
         if (!ctx) {
           throw new Error('Не удалось получить 2D контекст canvas');
         }
+
+        // Сбрасываем трансформации контекста перед рендерингом
+        ctx.resetTransform();
 
         // Используем единый рендерер
         renderScene(ctx, {
@@ -212,8 +218,20 @@ export function ImageGenerator({
     }
 
     const zipBlob = await zip.generateAsync({ type: 'blob' });
-    const zipUrl = URL.createObjectURL(zipBlob);
 
+    // В Electron — используем нативный диалог сохранения
+    if (window.electronAPI?.isElectron) {
+      const arrayBuffer = await zipBlob.arrayBuffer();
+      await window.electronAPI.saveFileDialog({
+        fileName: 'generated-images.zip',
+        data: arrayBuffer,
+      });
+      setIsZipping(false);
+      return;
+    }
+
+    // В браузере — скачивание через <a>
+    const zipUrl = URL.createObjectURL(zipBlob);
     const a = document.createElement('a');
     a.href = zipUrl;
     a.download = 'generated-images.zip';
@@ -221,18 +239,34 @@ export function ImageGenerator({
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-
     URL.revokeObjectURL(zipUrl);
     setIsZipping(false);
   }, [genFormat, genStartRow, csvData, buildFileName]);
 
   const downloadSingle = useCallback(
-    (url: string, index: number) => {
+    async (url: string, index: number) => {
       const rowIndex = genStartRow + index;
       const row = csvData.rows[rowIndex];
       const ext = genFormat === 'jpeg' ? 'jpg' : genFormat;
       const fileName = buildFileName(row, rowIndex, ext);
 
+      // В Electron — используем нативный диалог сохранения
+      if (window.electronAPI?.isElectron) {
+        try {
+          const response = await fetch(url);
+          const blob = await response.blob();
+          const arrayBuffer = await blob.arrayBuffer();
+          await window.electronAPI.saveFileDialog({
+            fileName,
+            data: arrayBuffer,
+          });
+        } catch (err) {
+          console.error('[downloadSingle] Ошибка сохранения файла:', err);
+        }
+        return;
+      }
+
+      // В браузере — скачивание через <a>
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;

@@ -1,9 +1,18 @@
 /**
  * Единый Canvas-рендерер для предпросмотра и генерации изображений.
  * Гарантирует WYSIWYG — что видишь в предпросмотре = что получишь при генерации.
+ *
+ * Отладка: установи localStorage.debugCanvas = 'true' для вывода метрик в консоль.
  */
 import type { TextLayer, CsvData } from '../types';
 import { drawBarcodeOnCanvas } from './drawBarcode';
+
+/** Включение отладочного режима через localStorage.debugCanvas */
+const DEBUG = typeof window !== 'undefined' && localStorage.getItem('debugCanvas') === 'true';
+
+function debugLog(...args: unknown[]) {
+  if (DEBUG) console.log('[CanvasRenderer]', ...args);
+}
 
 /** Настройки рендеринга сцены */
 export interface RenderSceneOptions {
@@ -63,6 +72,16 @@ export function renderScene(
 
   // Сортируем слои по order для правильного z-order
   const sortedLayers = [...layers].sort((a, b) => a.order - b.order);
+
+  // Отладка: выводим метрики при каждом рендере
+  debugLog('renderScene:', {
+    width,
+    height,
+    layerCount: layers.length,
+    rowIndex,
+    drawSelection,
+    dpr: window.devicePixelRatio,
+  });
 
   // Рендерим каждый слой
   for (const layer of sortedLayers) {
@@ -153,8 +172,24 @@ export function renderTextLayer(
 
   const lineHeight = fittedSize * 1.3;
   const totalTextHeight = lines.length * lineHeight;
+
+  // Отладка: метрики текстового слоя
+  debugLog('renderTextLayer:', {
+    layerId: layer.id,
+    columnName: layer.columnName,
+    text,
+    fittedSize,
+    requestedSize: layer.fontSize,
+    lines: lines.length,
+    totalTextHeight,
+    layerHeight: layer.height,
+    availW,
+    measureWidths: lines.map((l) => ctx.measureText(l).width),
+    dpr: window.devicePixelRatio,
+  });
+
   // Вертикальное центрирование
-  let startY = layer.y + Math.max(padding, (layer.height - totalTextHeight) / 2);
+  let startY = Math.round(layer.y + Math.max(padding, (layer.height - totalTextHeight) / 2));
 
   // Clip строго по границам слоя
   ctx.save();
@@ -163,11 +198,11 @@ export function renderTextLayer(
   ctx.clip();
 
   for (const line of lines) {
-    let lineX = layer.x + padding;
+    let lineX = Math.round(layer.x + padding);
     if (layer.textAlign === 'center') {
-      lineX = layer.x + layer.width / 2;
+      lineX = Math.round(layer.x + layer.width / 2);
     } else if (layer.textAlign === 'right') {
-      lineX = layer.x + layer.width - padding;
+      lineX = Math.round(layer.x + layer.width - padding);
     }
     ctx.fillText(line, lineX, startY);
     startY += lineHeight;

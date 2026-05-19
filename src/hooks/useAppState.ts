@@ -109,12 +109,12 @@ export function useAppState() {
           id: `layer-${index}`,
           columnIndex: index,
           columnName: header,
-          x: 20 + (index % 3) * 250,
-          y: 20 + Math.floor(index / 3) * 80,
+          x: Math.round(20 + (index % 3) * 250),
+          y: Math.round(20 + Math.floor(index / 3) * 80),
           width: isBarcode ? 260 : DEFAULT_LAYER_WIDTH,
           height: isBarcode ? 60 : DEFAULT_LAYER_HEIGHT,
           fontSize: 16,
-          fontFamily: 'Arial',
+          fontFamily: 'Inter',
           color: '#010101',
           textAlign: 'left' as CanvasTextAlign,
           fontStyle: 'normal',
@@ -258,8 +258,8 @@ export function useAppState() {
       const scaleX = imageSize.width / canvasRect.width;
       const scaleY = imageSize.height / canvasRect.height;
 
-      const newX = (clientX - dragOffset.x) * scaleX;
-      const newY = (clientY - dragOffset.y) * scaleY;
+      const newX = Math.round((clientX - dragOffset.x) * scaleX);
+      const newY = Math.round((clientY - dragOffset.y) * scaleY);
 
       updateLayer(selectedLayerId, {
         x: Math.max(0, newX),
@@ -323,19 +323,19 @@ export function useAppState() {
       const updates: Partial<TextLayer> = {};
 
       if (resizeHandle.includes('e')) {
-        updates.width = Math.max(50, start.width + deltaX);
+        updates.width = Math.round(Math.max(50, start.width + deltaX));
       }
       if (resizeHandle.includes('s')) {
-        updates.height = Math.max(20, start.height + deltaY);
+        updates.height = Math.round(Math.max(20, start.height + deltaY));
       }
       if (resizeHandle.includes('w')) {
-        const newWidth = Math.max(50, start.width - deltaX);
-        updates.x = start.x + (start.width - newWidth);
+        const newWidth = Math.round(Math.max(50, start.width - deltaX));
+        updates.x = Math.round(start.x + (start.width - newWidth));
         updates.width = newWidth;
       }
       if (resizeHandle.includes('n')) {
-        const newHeight = Math.max(20, start.height - deltaY);
-        updates.y = start.y + (start.height - newHeight);
+        const newHeight = Math.round(Math.max(20, start.height - deltaY));
+        updates.y = Math.round(start.y + (start.height - newHeight));
         updates.height = newHeight;
       }
 

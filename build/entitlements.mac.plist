@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Разрешить JIT компиляцию (нужно для V8/Chromium) -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <!-- Разрешить загрузку unsigned executable memory (нужно для V8) -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <!-- Разрешить dylib загрузку (нужно для Electron) -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <!-- Разрешить исходящие сетевые соединения (для dev-server) -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>
