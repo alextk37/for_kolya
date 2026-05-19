@@ -62,8 +62,13 @@
       "dist/**/*",
       "dist-electron/**/*"
     ],
+    "asar": true,
     "mac": {
       "target": [
+        {
+          "target": "dir",
+          "arch": ["arm64"]
+        },
         {
           "target": "zip",
           "arch": ["arm64"]
@@ -71,10 +76,17 @@
       ],
       "category": "public.app-category.graphics-design",
       "icon": "build/icon.png",
-      "hardenedRuntime": false,
+      "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSHighResolutionCapable": true,
+        "LSMinimumSystemVersion": "12.0.0",
+        "NSRequiresAquaSystemAppearance": false,
+        "CFBundleInfoDictionaryVersion": "6.0"
+      },
+      "notarize": false
     },
     "linux": {
       "target": [

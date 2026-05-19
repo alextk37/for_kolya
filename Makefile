@@ -1,6 +1,7 @@
 .PHONY: dev build preview install clean commit push deploy all up \
        electron-dev electron-build electron-preview \
-       electron-build-mac electron-build-linux electron-build-all
+       electron-build-mac electron-build-linux electron-build-all \
+       electron-mac-fix
 
 # ──────────────────────────────────────────────
 # Разработка (веб)
@@ -74,3 +75,8 @@ electron-build-linux:
 # Сборка для macOS и Linux одновременно
 electron-build-all:
 	npm run electron:build:all
+
+# Пост-сборка macOS: ad-hoc подпись + удаление quarantine
+# Решает проблему "приложение повреждено" на macOS M1/M2/M3
+electron-mac-fix:
+	./scripts/mac-postbuild.sh

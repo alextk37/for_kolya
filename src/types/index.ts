@@ -7,12 +7,40 @@ export interface BarcodeOptions {
   displayValue: boolean;
   /** Размер шрифта под штрихкодом */
   fontSize: number;
+  /** Шрифт текста под штрихкодом */
+  fontFamily: string;
   /** Цвет полос */
   lineColor: string;
   /** Цвет фона */
   background: string;
-  /** Отступы вокруг штрихкода */
+  /** Отступы вокруг штрихкода (общий) */
   margin: number;
+  /** Отступ сверху */
+  marginTop: number;
+  /** Отступ снизу */
+  marginBottom: number;
+  /** Отступ слева */
+  marginLeft: number;
+  /** Отступ справа */
+  marginRight: number;
+  /** Отступ между штрихкодом и текстом */
+  textMargin: number;
+  /** Выравнивание текста под штрихкодом */
+  textAlign: CanvasTextAlign;
+}
+
+export interface TextShadow {
+  color: string;
+  blur: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+export interface TextStroke {
+  /** Цвет обводки */
+  color: string;
+  /** Толщина обводки (px) */
+  width: number;
 }
 
 export interface TextLayer {
@@ -27,7 +55,9 @@ export interface TextLayer {
   fontFamily: string;
   color: string;
   textAlign: CanvasTextAlign;
-  fontStyle: string; // normal, bold, italic, bold italic
+  fontStyle: string; // normal, italic
+  /** Насыщенность шрифта (100 — Thin, 200 — ExtraLight, ..., 900 — Black) */
+  fontWeight: number;
   rotation: number; // degrees, 0-360
   /** Если true — слой отображает EAN-13 штрихкод вместо текста */
   isBarcode: boolean;
@@ -39,6 +69,24 @@ export interface TextLayer {
   locked: boolean;
   /** Порядок слоя (z-index). Больше значение — выше слой */
   order: number;
+  /** Межбуквенный интервал (px) */
+  letterSpacing: number;
+  /** Межстрочный интервал (множитель, напр. 1.3) */
+  lineHeight: number;
+  /** Межсловный интервал (px) */
+  wordSpacing: number;
+  /** Декорация текста */
+  textDecoration: 'none' | 'underline' | 'line-through';
+  /** Трансформация текста */
+  textTransform: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+  /** Прозрачность текста (0-1) */
+  opacity: number;
+  /** Тень текста */
+  textShadow: TextShadow | null;
+  /** Обводка текста */
+  textStroke: TextStroke | null;
+  /** Вертикальное выравнивание текста внутри слоя */
+  textBaseline: 'top' | 'middle' | 'bottom';
 }
 
 export interface CsvData {

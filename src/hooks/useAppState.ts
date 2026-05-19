@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import type { TextLayer, CsvData, BarcodeOptions } from '../types';
 import { parseCsvFile } from '../utils/csvParser';
+import { loadImageWithDimensions } from '../utils/imageUtils';
 
 const DEFAULT_LAYER_WIDTH = 200;
 const DEFAULT_LAYER_HEIGHT = 50;
@@ -16,9 +17,16 @@ function createDefaultBarcodeOptions(): BarcodeOptions {
     width: 1,
     displayValue: true,
     fontSize: 12,
+    fontFamily: 'Inter',
     lineColor: '#010101',
     background: '#ffffff',
     margin: 4,
+    marginTop: 0,
+    marginBottom: 0,
+    marginLeft: 0,
+    marginRight: 0,
+    textMargin: 2,
+    textAlign: 'center',
   };
 }
 
@@ -76,23 +84,32 @@ export function useAppState() {
   const canRedo = useCallback(() => redoStackRef.current.length > 0, []);
 
   // --- Загрузка изображения ---
-  const handleImageLoad = useCallback((file: File) => {
+  const handleImageLoad = useCallback(async (file: File) => {
     if (imageUrl) {
       URL.revokeObjectURL(imageUrl);
     }
 
     const url = URL.createObjectURL(file);
-    setImageUrl(url);
 
-    const img = new Image();
-    if (url.startsWith('http')) {
-      img.crossOrigin = 'anonymous';
-    }
-    img.onload = () => {
-      setImageSize({ width: img.naturalWidth, height: img.naturalHeight });
+    try {
+      const { img, width, height, finalUrl } = await loadImageWithDimensions(file, url);
+      // Для SVG finalUrl может отличаться от url (инжекция размеров)
+      // Освобождаем оригинальный URL если он был заменён
+      if (finalUrl !== url) {
+        URL.revokeObjectURL(url);
+      }
+      setImageUrl(finalUrl);
+      setImageSize({ width, height });
       imageRef.current = img;
-    };
-    img.src = url;
+    } catch (err) {
+      // Если не удалось загрузить — освобождаем URL и показываем ошибку
+      URL.revokeObjectURL(url);
+      setImageUrl(null);
+      setImageSize(null);
+      imageRef.current = null;
+      console.error('Failed to load image:', err);
+    }
+
     setIsDirty(true);
   }, [imageUrl]);
 
@@ -118,12 +135,22 @@ export function useAppState() {
           color: '#010101',
           textAlign: 'left' as CanvasTextAlign,
           fontStyle: 'normal',
+          fontWeight: 400,
           rotation: 0,
           isBarcode,
           barcodeOptions: createDefaultBarcodeOptions(),
           visible: true,
           locked: false,
           order: index,
+          letterSpacing: 0,
+          lineHeight: 1.3,
+          wordSpacing: 0,
+          textDecoration: 'none' as const,
+          textTransform: 'none' as const,
+          opacity: 1,
+          textShadow: null,
+          textStroke: null,
+          textBaseline: 'middle' as const,
         };
       });
 
@@ -399,6 +426,28 @@ export function useAppState() {
           visible: l.visible ?? true,
           locked: l.locked ?? false,
           order: l.order ?? i,
+          fontWeight: l.fontWeight ?? (l.fontStyle?.includes('bold') ? 700 : 400),
+          letterSpacing: l.letterSpacing ?? 0,
+          lineHeight: l.lineHeight ?? 1.3,
+          wordSpacing: l.wordSpacing ?? 0,
+          textDecoration: l.textDecoration ?? 'none',
+          textTransform: l.textTransform ?? 'none',
+          opacity: l.opacity ?? 1,
+          textShadow: l.textShadow ?? null,
+          textStroke: l.textStroke ?? null,
+          textBaseline: l.textBaseline ?? 'middle',
+          barcodeOptions: l.barcodeOptions
+            ? {
+                ...l.barcodeOptions,
+                fontFamily: l.barcodeOptions.fontFamily ?? 'Inter',
+                marginTop: l.barcodeOptions.marginTop ?? 0,
+                marginBottom: l.barcodeOptions.marginBottom ?? 0,
+                marginLeft: l.barcodeOptions.marginLeft ?? 0,
+                marginRight: l.barcodeOptions.marginRight ?? 0,
+                textMargin: l.barcodeOptions.textMargin ?? 2,
+                textAlign: l.barcodeOptions.textAlign ?? 'center',
+              }
+            : createDefaultBarcodeOptions(),
         }))
       );
       setSelectedLayerId(projectLayers.length > 0 ? projectLayers[0].id : null);

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import type { TextLayer, CsvData } from '../types';
 import { renderScene } from '../utils/canvasRenderer';
 
@@ -28,7 +28,7 @@ export function RowPreviewModal({
   onNextRow,
 }: RowPreviewModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const nameRef = useRef<HTMLDivElement>(null);
+  const [showData, setShowData] = useState(true);
 
   // Рендерим предпросмотр на Canvas
   useEffect(() => {
@@ -40,7 +40,7 @@ export function RowPreviewModal({
 
     // Размеры модалки — подгоняем под пропорции изображения
     const maxW = Math.min(800, window.innerWidth - 80);
-    const maxH = Math.min(600, window.innerHeight - 200);
+    const maxH = Math.min(600, window.innerHeight - 280);
     const aspectRatio = imageWidth / imageHeight;
 
     let displayW = maxW;
@@ -78,13 +78,14 @@ export function RowPreviewModal({
     ctx.restore();
   }, [open, image, imageWidth, imageHeight, layers, csvData, rowIndex]);
 
-  // Escape для закрытия
+  // Клавиатурные шорткаты
   useEffect(() => {
     if (!open) return;
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowLeft') onPrevRow();
-      if (e.key === 'ArrowRight') onNextRow();
+      if (e.key === 'ArrowLeft') { e.preventDefault(); onPrevRow(); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); onNextRow(); }
+      if (e.key === 'd' || e.key === 'D') setShowData((v) => !v);
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
@@ -111,29 +112,43 @@ export function RowPreviewModal({
 
   const row = csvData.rows[rowIndex];
   const totalRows = csvData.rows.length;
+  const progress = totalRows > 1 ? (rowIndex / (totalRows - 1)) * 100 : 0;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal modal--preview"
         onClick={(e) => e.stopPropagation()}
-        ref={nameRef}
       >
+        {/* Заголовок */}
         <div className="modal__preview-header">
-          <h3 className="modal__title">
-            Предпросмотр: строка {rowIndex + 1} из {totalRows}
-          </h3>
-          <button className="btn btn--ghost btn--small" onClick={onClose}>
-            ✕
+          <div className="modal__preview-header-left">
+            <h3 className="modal__title">
+              Предпросмотр
+            </h3>
+            <span className="modal__preview-row-badge">
+              Строка {rowIndex + 1}
+            </span>
+          </div>
+          <button className="btn btn--ghost btn--small modal__preview-close" onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
           </button>
         </div>
 
+        {/* Прогресс-бар навигации */}
+        <div className="modal__preview-progress">
+          <div className="modal__preview-progress-fill" style={{ width: `${progress}%` }} />
+        </div>
+
+        {/* Canvas */}
         <div className="modal__preview-canvas">
           <canvas ref={canvasRef} />
         </div>
 
         {/* Данные строки */}
-        {row && (
+        {row && showData && (
           <div className="modal__preview-data">
             {csvData.headers.map((header, i) => (
               <div key={i} className="modal__preview-field">
@@ -147,25 +162,60 @@ export function RowPreviewModal({
         {/* Навигация */}
         <div className="modal__preview-nav">
           <button
-            className="btn btn--ghost btn--small"
+            className="modal__preview-nav-btn"
             onClick={onPrevRow}
             disabled={rowIndex <= 0}
+            title="Предыдущая строка (←)"
           >
-            ← Пред.
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M10 4L6 8L10 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>Пред.</span>
           </button>
-          <span className="modal__preview-counter">
-            {rowIndex + 1} / {totalRows}
-          </span>
+
+          <div className="modal__preview-nav-center">
+            <span className="modal__preview-counter">
+              <span className="modal__preview-counter-current">{rowIndex + 1}</span>
+              <span className="modal__preview-counter-sep">/</span>
+              <span className="modal__preview-counter-total">{totalRows}</span>
+            </span>
+            <button
+              className="modal__preview-toggle-data"
+              onClick={() => setShowData((v) => !v)}
+              title={showData ? 'Скрыть данные (D)' : 'Показать данные (D)'}
+            >
+              {showData ? '📊' : '📋'}
+            </button>
+          </div>
+
           <button
-            className="btn btn--ghost btn--small"
+            className="modal__preview-nav-btn"
             onClick={onNextRow}
             disabled={rowIndex >= totalRows - 1}
+            title="Следующая строка (→)"
           >
-            След. →
+            <span>След.</span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
-          <button className="btn btn--primary btn--small" onClick={handleDownload}>
-            💾 Скачать
+
+          <div className="modal__preview-nav-divider" />
+
+          <button className="modal__preview-download-btn" onClick={handleDownload} title="Скачать PNG">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 2V10M8 10L5 7M8 10L11 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M2 12V13H14V12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>Скачать</span>
           </button>
+        </div>
+
+        {/* Подсказки */}
+        <div className="modal__preview-hints">
+          <span>← → навигация</span>
+          <span>D — данные</span>
+          <span>Esc — закрыть</span>
         </div>
       </div>
     </div>

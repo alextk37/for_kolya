@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import JSZip from 'jszip';
 import type { TextLayer, CsvData, GenerationError } from '../types';
 import { renderScene } from '../utils/canvasRenderer';
@@ -85,6 +85,60 @@ export function ImageGenerator({
     [genFileNameTemplate, csvData.headers]
   );
 
+  /** Проверка дубликатов имён файлов */
+  const duplicateNames = useMemo(() => {
+    const ext = genFormat === 'jpeg' ? 'jpg' : genFormat;
+    const names = new Map<string, number[]>();
+    const startRow = Math.max(0, genStartRow);
+    const endRow = Math.min(csvData.rows.length - 1, genEndRow);
+
+    for (let i = startRow; i <= endRow; i++) {
+      const fileName = buildFileName(csvData.rows[i], i, ext);
+      if (!names.has(fileName)) {
+        names.set(fileName, []);
+      }
+      names.get(fileName)!.push(i + 1);
+    }
+
+    const duplicates: { name: string; rows: number[] }[] = [];
+    for (const [name, rows] of names) {
+      if (rows.length > 1) {
+        duplicates.push({ name, rows });
+      }
+    }
+    return duplicates;
+  }, [genFileNameTemplate, genFormat, genStartRow, genEndRow, csvData, buildFileName]);
+
+  /** Превью имён файлов (первые 5) */
+  const fileNamePreview = useMemo(() => {
+    const ext = genFormat === 'jpeg' ? 'jpg' : genFormat;
+    const startRow = Math.max(0, genStartRow);
+    const endRow = Math.min(csvData.rows.length - 1, genEndRow);
+    const previews: { rowIndex: number; fileName: string }[] = [];
+    const count = Math.min(5, endRow - startRow + 1);
+    for (let i = 0; i < count; i++) {
+      const ri = startRow + i;
+      previews.push({
+        rowIndex: ri + 1,
+        fileName: buildFileName(csvData.rows[ri], ri, ext),
+      });
+    }
+    return previews;
+  }, [genFileNameTemplate, genFormat, genStartRow, genEndRow, csvData, buildFileName]);
+
+  /** Доступные плейсхолдеры для шаблона */
+  const availablePlaceholders = useMemo(() => {
+    return csvData.headers.map((h) => {
+      const safeHeader = h.replace(/[^a-zA-Zа-яА-Я0-9_]/g, '_');
+      return { original: h, placeholder: `{${safeHeader}}` };
+    });
+  }, [csvData.headers]);
+
+  /** Вставка плейсхолдера в шаблон */
+  const insertPlaceholder = useCallback((placeholder: string) => {
+    setGenFileNameTemplate((prev) => prev + placeholder);
+  }, []);
+
   const generateImages = useCallback(async () => {
     // Отменяем предыдущую генерацию, если она ещё идёт
     if (abortRef.current) {
@@ -133,6 +187,9 @@ export function ImageGenerator({
         ctx.resetTransform();
 
         // Используем единый рендерер
+        // Для JPEG/WebP — заливаем белый фон, иначе прозрачные области станут чёрными
+        const bgColor = genFormat !== 'png' ? '#ffffff' : undefined;
+
         renderScene(ctx, {
           width: imageWidth,
           height: imageHeight,
@@ -142,6 +199,7 @@ export function ImageGenerator({
           image: baseImage,
           drawSelection: false,
           respectVisibility: true,
+          backgroundColor: bgColor,
         });
 
         let blob: Blob;
@@ -364,17 +422,78 @@ export function ImageGenerator({
 
         <div className="prop-group">
           <div className="prop-group__label">
-            <span>Шаблон имени файла</span>
+            <span>Имя файла</span>
           </div>
           <input
             type="text"
             value={genFileNameTemplate}
             onChange={(e) => setGenFileNameTemplate(e.target.value)}
             placeholder="{index}"
+            className={duplicateNames.length > 0 ? 'input--warning' : ''}
           />
-          <span className="prop-group__hint">
-            {'{index}'} — номер строки, {'{Имя_колонки}'} — значение из CSV
-          </span>
+          <div className="filename-helpers">
+            <span className="prop-group__hint">
+              Используйте плейсхолдеры для подстановки данных из CSV
+            </span>
+            <div className="filename-placeholders">
+              <button
+                className="placeholder-chip"
+                onClick={() => insertPlaceholder('{index}')}
+                title="Номер строки (1, 2, 3...)"
+              >
+                {'{index}'}
+              </button>
+              {availablePlaceholders.map((p) => (
+                <button
+                  key={p.original}
+                  className="placeholder-chip"
+                  onClick={() => insertPlaceholder(p.placeholder)}
+                  title={`Значение колонки "${p.original}"`}
+                >
+                  {p.placeholder}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Предупреждение о дубликатах */}
+          {duplicateNames.length > 0 && (
+            <div className="filename-duplicates-warning">
+              <span className="filename-duplicates-warning__icon">⚠️</span>
+              <div className="filename-duplicates-warning__content">
+                <span className="filename-duplicates-warning__title">
+                  {duplicateNames.length} {duplicateNames.length === 1 ? 'дублирующееся имя' : 'дублирующихся имён'}
+                </span>
+                {duplicateNames.slice(0, 3).map((d) => (
+                  <span key={d.name} className="filename-duplicates-warning__item">
+                    «{d.name}» — строки {d.rows.join(', ')}
+                  </span>
+                ))}
+                {duplicateNames.length > 3 && (
+                  <span className="filename-duplicates-warning__more">
+                    + ещё {duplicateNames.length - 3}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Превью имён */}
+          {fileNamePreview.length > 0 && (
+            <div className="filename-preview">
+              <span className="filename-preview__title">Предпросмотр:</span>
+              {fileNamePreview.map((p) => (
+                <span key={p.rowIndex} className="filename-preview__item">
+                  Строка {p.rowIndex}: <code>{p.fileName}</code>
+                </span>
+              ))}
+              {(Math.min(csvData.rows.length - 1, genEndRow) - genStartRow + 1) > 5 && (
+                <span className="filename-preview__more">
+                  ...и ещё {Math.min(csvData.rows.length - 1, genEndRow) - genStartRow + 1 - 5} файлов
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

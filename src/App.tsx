@@ -9,6 +9,7 @@ import { ImageGenerator } from './components/ImageGenerator';
 import { ProjectSelector } from './components/ProjectSelector';
 import { SaveProjectModalWrapper } from './components/SaveProjectModal';
 import { RowPreviewModal } from './components/RowPreviewModal';
+import { PreviewBar } from './components/PreviewBar';
 import { ToastContainer } from './components/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import {
@@ -17,6 +18,7 @@ import {
   generateProjectId,
   resetRootHandle,
 } from './utils/projectStorage';
+import { loadImageFromBlob } from './utils/imageUtils';
 import type { SaveProjectData } from './components/SaveProjectModal';
 import type { ProjectRecord } from './types';
 
@@ -73,7 +75,7 @@ function App() {
       if (e.key === 'Escape') {
         state.selectLayer(null);
       }
-      // Стрелки — сдвинуть слой
+      // Стрелки — сдвинуть слой (если есть выделенный)
       if (state.selectedLayerId && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;
@@ -85,6 +87,23 @@ function App() {
         if (e.key === 'ArrowLeft') updates.x = layer.x - step;
         if (e.key === 'ArrowRight') updates.x = layer.x + step;
         state.updateLayer(state.selectedLayerId, updates);
+        return;
+      }
+      // Стрелки без выделения — навигация по предпросмотру
+      if (!state.selectedLayerId && state.csvData && ['ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        if (e.key === 'ArrowLeft') {
+          state.setPreviewRowIndex(Math.max(0, state.previewRowIndex - 1));
+        } else {
+          state.setPreviewRowIndex(Math.min(state.csvData.rows.length - 1, state.previewRowIndex + 1));
+        }
+        return;
+      }
+      // Enter — открыть полный предпросмотр
+      if (e.key === 'Enter' && !state.selectedLayerId && state.csvData) {
+        e.preventDefault();
+        setRowPreviewIndex(state.previewRowIndex);
+        setShowRowPreview(true);
       }
     };
 
@@ -134,24 +153,33 @@ function App() {
         if (!record) return;
 
         const imageUrl = URL.createObjectURL(record.imageBlob);
-        const img = new Image();
-        if (imageUrl.startsWith('http')) {
-          img.crossOrigin = 'anonymous';
-        }
-        img.onload = () => {
-          state.loadFromProject(
+
+        try {
+          const { img, width, height, finalUrl } = await loadImageFromBlob(
+            record.imageBlob,
             imageUrl,
-            record.imageSize,
+            record.imageSize
+          );
+
+          // Для SVG finalUrl может отличаться (инжекция размеров)
+          if (finalUrl !== imageUrl) {
+            URL.revokeObjectURL(imageUrl);
+          }
+
+          state.loadFromProject(
+            finalUrl,
+            { width, height },
             record.csvData,
             record.layers,
             img
           );
-        };
-        img.onerror = () => {
+        } catch (imgErr) {
+          // Если изображение не загрузилось — используем сохранённые размеры
           URL.revokeObjectURL(imageUrl);
-          console.error('Failed to load project image');
-        };
-        img.src = imageUrl;
+          console.error('Failed to load project image:', imgErr);
+          toast.error('Не удалось загрузить изображение проекта');
+          return;
+        }
 
         setCurrentProjectId(record.id);
         setProjectName(record.name);
@@ -249,10 +277,14 @@ function App() {
   }, [state.imageUrl, state.imageSize, state.csvData]);
 
   const handleImageLoad = useCallback(
-    (file: File) => {
+    async (file: File) => {
       setImageFileName(file.name);
-      state.handleImageLoad(file);
-      toast.info('Изображение загружено');
+      try {
+        await state.handleImageLoad(file);
+        toast.info('Изображение загружено');
+      } catch {
+        toast.error('Не удалось загрузить изображение');
+      }
     },
     [state, toast]
   );
@@ -516,7 +548,7 @@ function App() {
               </div>
 
               <div className="app-layout__canvas">
-                {hasImage && state.imageSize && state.csvData && (
+                {hasImage && state.imageSize && (
                   <CanvasEditor
                     imageUrl={state.imageUrl!}
                     imageWidth={state.imageSize.width}
@@ -587,30 +619,15 @@ function App() {
 
         {/* Селектор строки предпросмотра */}
         {hasCsv && state.csvData && (
-          <div className="preview-row-selector">
-            <span className="preview-row-selector__label">Предпросмотр:</span>
-            <select
-              className="preview-row-selector__select"
-              value={state.previewRowIndex}
-              onChange={(e) => state.setPreviewRowIndex(parseInt(e.target.value, 10))}
-            >
-              {state.csvData.rows.map((row, i) => (
-                <option key={i} value={i}>
-                  Строка {i + 1}: {row.slice(0, 3).join(', ')}{row.length > 3 ? '...' : ''}
-                </option>
-              ))}
-            </select>
-            <button
-              className="btn btn--ghost btn--small"
-              onClick={() => {
-                setRowPreviewIndex(state.previewRowIndex);
-                setShowRowPreview(true);
-              }}
-              title="Открыть полный предпросмотр"
-            >
-              🔍
-            </button>
-          </div>
+          <PreviewBar
+            csvData={state.csvData}
+            rowIndex={state.previewRowIndex}
+            onChangeRow={state.setPreviewRowIndex}
+            onOpenPreview={() => {
+              setRowPreviewIndex(state.previewRowIndex);
+              setShowRowPreview(true);
+            }}
+          />
         )}
       </ErrorBoundary>
 

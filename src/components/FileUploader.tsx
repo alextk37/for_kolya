@@ -38,7 +38,7 @@ export function FileUploader({
 
   const imageDropzone = useDropzone({
     onDrop: onImageDrop,
-    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.bmp'] },
+    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.bmp'] },
     maxFiles: 1,
     disabled: false, // Всегда разрешаем замену
   });
@@ -69,7 +69,7 @@ export function FileUploader({
             <p className="dropzone__text">
               <strong>Загрузите изображение</strong>
               <br />
-              PNG, JPG, WebP или BMP
+              PNG, JPG, SVG, WebP или BMP
             </p>
             <p className="dropzone__hint">Перетащите файл или кликните для выбора</p>
           </>

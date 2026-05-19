@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, shell, ipcMain, dialog } from 'electron'
 import { join } from 'path'
-import { writeFile } from 'fs/promises'
+import { writeFile, mkdir } from 'fs/promises'
+import { existsSync } from 'fs'
 
 // __dirname доступен в runtime, т.к. vite-plugin-electron компилирует в CJS
 declare const __dirname: string
@@ -15,12 +16,13 @@ declare const __dirname: string
 //      с не-ASCII символами, что ломает LevelDB (backing store IndexedDB)
 //
 //   Решение:
-//   - Установить ASCII-имя приложения → userData = ~/.config/for-kolya/
-//   - Отключить sandbox через appendSwitch + appendArgument
+//   - Установить ASCII-имя приложения → userData = ~/Library/Application Support/for-kolya/
+//   - Отключить sandbox через appendSwitch + appendArgument (только Linux)
+//   - Явно создать директорию userData до первого обращения IndexedDB
 // ============================================================
 
 // Устанавливаем ASCII-имя приложения ДО app.whenReady()
-// Это гарантирует, что userData = ~/.config/for-kolya/ (без кириллицы)
+// Это гарантирует, что userData не содержит кириллицы
 // LevelDB (backing store IndexedDB) не работает с не-ASCII путями
 app.setName('for-kolya')
 
@@ -28,6 +30,23 @@ app.setName('for-kolya')
 // app.getPath('userData') вычисляется на основе app.getName()
 const userDataPath = join(app.getPath('appData'), 'for-kolya')
 app.setPath('userData', userDataPath)
+
+// Гарантируем существование директории userData до запуска
+// Без этого IndexedDB может молча падать при первом запуске на macOS
+if (!existsSync(userDataPath)) {
+  mkdir(userDataPath, { recursive: true }).catch((err) => {
+    console.error('[Main] Failed to create userData dir:', err)
+  })
+}
+
+// ============================================================
+//   Single Instance Lock — предотвращает дублирование процессов
+//   На macOS без этого клик на док-иконку может создать второе окно
+// ============================================================
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+}
 
 // Флаги отключения песочницы — ТОЛЬКО для Linux (AppImage)
 // На macOS эти флаги могут вызывать краш при запуске
@@ -39,6 +58,19 @@ if (process.platform === 'linux') {
   // appendArgument — более надёжный способ передать флаг в AppImage,
   // т.к. appendSwitch может не примениться к дочерним процессам
   app.commandLine.appendArgument('--no-sandbox')
+}
+
+// ============================================================
+//   macOS M1: Фикс GPU и рендеринга
+//   На некоторых конфигурациях M1/M2/M3 Electron может крашиться
+//   из-за проблем с ANGLE/GPU процессом
+// ============================================================
+if (process.platform === 'darwin') {
+  // Использовать нативный OpenGL вместо ANGLE на macOS
+  // Это предотвращает краш GPU процесса на Apple Silicon
+  app.commandLine.appendSwitch('use-angle', 'metal')
+  // Отключить GPU sandbox — на macOS hardenedRuntime это может мешать
+  app.commandLine.appendSwitch('disable-gpu-sandbox')
 }
 
 let mainWindow: BrowserWindow | null = null
@@ -189,6 +221,15 @@ function createWindow(): void {
 //   Жизненный цикл приложения
 // ============================================================
 
+// Обработка second-instance: если пользователь попытался запустить
+// вторую копию — фокусируем существующее окно
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  }
+})
+
 app.whenReady().then(() => {
   createWindow()
 
@@ -198,6 +239,13 @@ app.whenReady().then(() => {
       createWindow()
     }
   })
+}).catch((err) => {
+  console.error('[Main] app.whenReady() failed:', err)
+  dialog.showErrorBox(
+    'Ошибка запуска',
+    `Не удалось запустить приложение: ${err instanceof Error ? err.message : String(err)}`
+  )
+  app.quit()
 })
 
 // Закрыть приложение когда все окна закрыты (кроме macOS — там приложение

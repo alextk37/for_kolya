@@ -6,6 +6,8 @@ import {
   hitTestResizeHandle,
 } from '../utils/canvasRenderer';
 
+const EMPTY_CSV_DATA: CsvData = { headers: [], rows: [] };
+
 interface CanvasEditorProps {
   imageUrl: string;
   imageWidth: number;
@@ -14,7 +16,7 @@ interface CanvasEditorProps {
   selectedLayerId: string | null;
   isDragging: boolean;
   isResizing: boolean;
-  csvData: CsvData;
+  csvData: CsvData | null;
   previewRowIndex: number;
   onSelectLayer: (id: string | null) => void;
   onStartDrag: (id: string, clientX: number, clientY: number, canvasRect: DOMRect) => void;
@@ -136,7 +138,7 @@ export function CanvasEditor({
       width: imageWidth,
       height: imageHeight,
       layers,
-      csvData,
+      csvData: csvData ?? EMPTY_CSV_DATA,
       rowIndex: previewRowIndex,
       image: imageRef.current,
       drawSelection: true,

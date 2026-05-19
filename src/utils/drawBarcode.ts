@@ -82,19 +82,27 @@ export function drawBarcodeOnCanvas(
 ): void {
   try {
     const cleanValue = sanitizeEan13(value);
-    const margin = Math.max(0, options.margin);
+
+    // Вычисляем итоговые отступы: если индивидуальные отступы = 0, используем общий margin
+    const marginTop = options.marginTop || options.margin;
+    const marginBottom = options.marginBottom || options.margin;
+    const marginLeft = options.marginLeft || options.margin;
+    const marginRight = options.marginRight || options.margin;
 
     // EAN-13 состоит из 95 модулей (полосы + пробелы).
     // barWidth подбираем так, чтобы занять максимум доступной ширины.
     const EAN13_MODULES = 95;
-    const availableWidth = width - 2 * margin;
+    const availableWidth = width - marginLeft - marginRight;
     const barWidth = Math.max(1, Math.floor(availableWidth / EAN13_MODULES));
 
     // Высота полос: вся высота минус отступы и, если нужно, зона текста.
-    const fontSize = options.displayValue ? Math.max(8, Math.round(height * 0.15)) : 0;
+    const fontSize = options.displayValue
+      ? Math.max(8, options.fontSize || Math.round(height * 0.15))
+      : 0;
+    const textMargin = options.displayValue ? Math.max(0, options.textMargin) : 0;
     const barHeight = Math.max(
       10,
-      Math.round(height - 2 * margin - (options.displayValue ? fontSize + 4 : 0))
+      Math.round(height - marginTop - marginBottom - (options.displayValue ? fontSize + textMargin : 0))
     );
 
     const tempCanvas = document.createElement('canvas');
@@ -105,9 +113,12 @@ export function drawBarcodeOnCanvas(
       height: barHeight,
       displayValue: options.displayValue,
       fontSize: fontSize,
+      font: options.fontFamily || 'Inter',
+      textMargin: textMargin,
+      textAlign: options.textAlign || 'center',
       lineColor: options.lineColor,
       background: options.background,
-      margin: margin,
+      margin: 0, // Мы управляем отступами вручную через позиционирование
       flat: false,
     });
 
@@ -118,16 +129,19 @@ export function drawBarcodeOnCanvas(
       throw new Error('Invalid barcode dimensions');
     }
 
-    // Вписываем в слой с сохранением пропорций.
+    // Вписываем в слой с учётом индивидуальных отступов.
     // imageSmoothingEnabled=false — полосы остаются чёткими.
-    const scaleX = width / barcodeW;
-    const scaleY = height / barcodeH;
+    const availW = width - marginLeft - marginRight;
+    const availH = height - marginTop - marginBottom;
+    const scaleX = availW / barcodeW;
+    const scaleY = availH / barcodeH;
     const scale = Math.min(scaleX, scaleY);
 
     const drawW = barcodeW * scale;
     const drawH = barcodeH * scale;
-    const drawX = x + (width - drawW) / 2;
-    const drawY = y + (height - drawH) / 2;
+    // Позиционируем с учётом отступов и выравнивания по центру
+    const drawX = x + marginLeft + (availW - drawW) / 2;
+    const drawY = y + marginTop + (availH - drawH) / 2;
 
     const prevSmoothing = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = false;

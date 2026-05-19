@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- Явно отключаем App Sandbox — приложение не подписано Apple Developer ID,
+         поэтому sandbox вызовет краш при запуске через Gatekeeper -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
     <!-- Разрешить JIT компиляцию (нужно для V8/Chromium) -->
     <key>com.apple.security.cs.allow-jit</key>
     <true/>
@@ -13,6 +17,9 @@
     <true/>
     <!-- Разрешить исходящие сетевые соединения (для dev-server) -->
     <key>com.apple.security.network.client</key>
+    <true/>
+    <!-- Разрешить чтение файлов пользователя (для диалогов сохранения) -->
+    <key>com.apple.security.files.user-selected.read-write</key>
     <true/>
 </dict>
 </plist>
