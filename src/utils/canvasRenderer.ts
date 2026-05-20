@@ -257,9 +257,12 @@ export function renderTextLayer(
   ctx.rect(layer.x, layer.y, layer.width, layer.height);
   ctx.clip();
 
-  // Масштабирование по X для симуляции font-stretch (ширины шрифта)
+  // Масштабирование по X для симуляции font-stretch (ширины шрифта).
+  // Все координаты X для позиционирования текста вычисляем в scaled-пространстве,
+  // чтобы выравнивание (left/center/right) работало корректно.
   const fontScaleX = fontWidth / 100;
-  if (fontScaleX !== 1) {
+  const applyScale = fontScaleX !== 1;
+  if (applyScale) {
     ctx.save();
     ctx.translate(layer.x, 0);
     ctx.scale(fontScaleX, 1);
@@ -267,12 +270,18 @@ export function renderTextLayer(
   }
 
   for (const line of lines) {
-    let lineX = Math.round(layer.x + padding);
-    if (layer.textAlign === 'center') {
-      lineX = Math.round(layer.x + layer.width / 2);
+    // Координаты в scaled-пространстве: делим offset от layer.x на fontScaleX
+    let lineX: number;
+    if (layer.textAlign === 'left') {
+      lineX = layer.x + padding / fontScaleX;
     } else if (layer.textAlign === 'right') {
-      lineX = Math.round(layer.x + layer.width - padding);
+      lineX = layer.x + (layer.width - padding) / fontScaleX;
+    } else {
+      // center
+      lineX = layer.x + layer.width / 2 / fontScaleX;
     }
+    lineX = Math.round(lineX);
+
     // Декорация текста (underline / line-through)
     if (layer.textDecoration && layer.textDecoration !== 'none') {
       ctx.save();
@@ -364,7 +373,7 @@ export function renderTextLayer(
   }
 
   // Восстанавливаем масштаб, если применяли font-stretch
-  if (fontScaleX !== 1) {
+  if (applyScale) {
     ctx.restore();
   }
 
