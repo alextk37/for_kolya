@@ -11,6 +11,10 @@ interface ImageGeneratorProps {
   csvData: CsvData;
   isGenerating: boolean;
   generatedCount: number;
+  /** Шаблон имени файла из проекта (или умолчание) */
+  fileNameTemplate: string;
+  /** Колбэк при изменении шаблона имени файла */
+  onFileNameTemplateChange: (template: string) => void;
   onStartGeneration: () => void;
   onGenerationProgress: (count: number) => void;
   onGenerationComplete: () => void;
@@ -27,6 +31,8 @@ export function ImageGenerator({
   csvData,
   isGenerating,
   generatedCount,
+  fileNameTemplate,
+  onFileNameTemplateChange,
   onStartGeneration,
   onGenerationProgress,
   onGenerationComplete,
@@ -45,7 +51,6 @@ export function ImageGenerator({
   const [genQuality, setGenQuality] = useState(0.92);
   const [genStartRow, setGenStartRow] = useState(0);
   const [genEndRow, setGenEndRow] = useState(csvData.rows.length - 1);
-  const [genFileNameTemplate, setGenFileNameTemplate] = useState('{index}');
 
   // Cleanup всех blob URL при размонтировании компонента
   useEffect(() => {
@@ -68,7 +73,7 @@ export function ImageGenerator({
   /** Формирует имя файла из шаблона и данных строки */
   const buildFileName = useCallback(
     (row: string[], rowIndex: number, ext: string): string => {
-      let name = genFileNameTemplate;
+      let name = fileNameTemplate;
       // Подставляем {index} — номер строки (1-based)
       name = name.replace(/\{index\}/g, String(rowIndex + 1));
       // Подставляем {columnName} — значение из соответствующей колонки
@@ -82,7 +87,7 @@ export function ImageGenerator({
       if (!name) name = `generated-${rowIndex + 1}`;
       return `${name}.${ext}`;
     },
-    [genFileNameTemplate, csvData.headers]
+    [fileNameTemplate, csvData.headers]
   );
 
   /** Проверка дубликатов имён файлов */
@@ -107,7 +112,7 @@ export function ImageGenerator({
       }
     }
     return duplicates;
-  }, [genFileNameTemplate, genFormat, genStartRow, genEndRow, csvData, buildFileName]);
+  }, [fileNameTemplate, genFormat, genStartRow, genEndRow, csvData, buildFileName]);
 
   /** Превью имён файлов (первые 5) */
   const fileNamePreview = useMemo(() => {
@@ -124,7 +129,7 @@ export function ImageGenerator({
       });
     }
     return previews;
-  }, [genFileNameTemplate, genFormat, genStartRow, genEndRow, csvData, buildFileName]);
+  }, [fileNameTemplate, genFormat, genStartRow, genEndRow, csvData, buildFileName]);
 
   /** Доступные плейсхолдеры для шаблона */
   const availablePlaceholders = useMemo(() => {
@@ -136,8 +141,8 @@ export function ImageGenerator({
 
   /** Вставка плейсхолдера в шаблон */
   const insertPlaceholder = useCallback((placeholder: string) => {
-    setGenFileNameTemplate((prev) => prev + placeholder);
-  }, []);
+    onFileNameTemplateChange(fileNameTemplate + placeholder);
+  }, [fileNameTemplate, onFileNameTemplateChange]);
 
   const generateImages = useCallback(async () => {
     // Отменяем предыдущую генерацию, если она ещё идёт
@@ -426,8 +431,8 @@ export function ImageGenerator({
           </div>
           <input
             type="text"
-            value={genFileNameTemplate}
-            onChange={(e) => setGenFileNameTemplate(e.target.value)}
+            value={fileNameTemplate}
+            onChange={(e) => onFileNameTemplateChange(e.target.value)}
             placeholder="{index}"
             className={duplicateNames.length > 0 ? 'input--warning' : ''}
           />

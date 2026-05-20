@@ -58,6 +58,8 @@ export interface TextLayer {
   fontStyle: string; // normal, italic
   /** Насыщенность шрифта (100 — Thin, 200 — ExtraLight, ..., 900 — Black) */
   fontWeight: number;
+  /** Ширина шрифта (font-stretch) в процентах: 100 = normal, 50 = ultra-condensed, 200 = ultra-expanded */
+  fontWidth: number;
   rotation: number; // degrees, 0-360
   /** Если true — слой отображает EAN-13 штрихкод вместо текста */
   isBarcode: boolean;
@@ -129,6 +131,11 @@ export interface ProjectManifest {
   layers: TextLayer[];
   /** Данные CSV (нужны для генерации) */
   csvData: CsvData;
+  /**
+   * Шаблон имени файла для генерации, например "{Name}_{index}".
+   * Если не указан — при генерации используется значение по умолчанию "{index}".
+   */
+  fileNameTemplate?: string;
 }
 
 /**

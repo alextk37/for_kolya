@@ -177,6 +177,7 @@ export function TextLayerComponent({
             fontFamily: layer.fontFamily,
             fontSize: layer.fontSize * Math.min(scaleX, scaleY),
             color: layer.color,
+            fontStretch: `${layer.fontWidth ?? 100}%`,
           }}
         >
           {layer.columnName}

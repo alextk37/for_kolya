@@ -33,6 +33,7 @@ function App() {
   const [projectName, setProjectName] = useState<string>('');
   const [imageFileName, setImageFileName] = useState<string>('');
   const [csvFileName, setCsvFileName] = useState<string>('');
+  const [fileNameTemplate, setFileNameTemplate] = useState<string>('{index}');
   const [saving, setSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showRowPreview, setShowRowPreview] = useState(false);
@@ -185,6 +186,8 @@ function App() {
         setProjectName(record.name);
         setImageFileName(record.imageFileName);
         setCsvFileName(record.csvFileName);
+        // Загружаем сохранённый шаблон имени файла или используем умолчание
+        setFileNameTemplate(record.fileNameTemplate || '{index}');
         setScreen('editor');
         toast.success('Проект загружен');
       } catch (err) {
@@ -201,6 +204,7 @@ function App() {
     setProjectName('');
     setImageFileName('');
     setCsvFileName('');
+    setFileNameTemplate('{index}');
     state.resetAll();
     setScreen('editor');
   }, [state]);
@@ -241,6 +245,7 @@ function App() {
           layers: state.layers,
           csvData: state.csvData,
           imageBlob,
+          fileNameTemplate: fileNameTemplate !== '{index}' ? fileNameTemplate : undefined,
         };
 
         await saveProject(record, {
@@ -305,6 +310,7 @@ function App() {
   const doReset = useCallback(() => {
     setImageFileName('');
     setCsvFileName('');
+    setFileNameTemplate('{index}');
     state.resetAll();
     setShowResetConfirm(false);
     toast.info('Проект сброшен');
@@ -534,6 +540,8 @@ function App() {
                       csvData={state.csvData}
                       isGenerating={state.isGenerating}
                       generatedCount={state.generatedCount}
+                      fileNameTemplate={fileNameTemplate}
+                      onFileNameTemplateChange={setFileNameTemplate}
                       onStartGeneration={() => state.setIsGenerating(true)}
                       onGenerationProgress={state.setGeneratedCount}
                       onGenerationComplete={() => state.setIsGenerating(false)}

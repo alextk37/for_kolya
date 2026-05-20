@@ -692,6 +692,29 @@ export function LayerPanel({
                     <span>Чёрный</span>
                   </div>
                 </div>
+
+                <div className="prop-group">
+                  <div className="prop-group__label">
+                    <span>Ширина шрифта</span>
+                    <span className="prop-group__value">{selectedLayer.fontWidth ?? 100}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={50}
+                    max={200}
+                    step={5}
+                    value={selectedLayer.fontWidth ?? 100}
+                    onChange={(e) =>
+                      onUpdateLayer(selectedLayer.id, { fontWidth: parseInt(e.target.value, 10) })
+                    }
+                    className="font-weight-slider"
+                  />
+                  <div className="font-weight-marks">
+                    <span>Узкий</span>
+                    <span>Нормальный</span>
+                    <span>Широкий</span>
+                  </div>
+                </div>
               </div>
 
               <div className="prop-row">

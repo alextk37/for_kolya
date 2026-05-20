@@ -174,6 +174,7 @@ export function renderTextLayer(
 
   // Автоподбор размера шрифта
   const fontWeight = layer.fontWeight ?? 400;
+  const fontWidth = layer.fontWidth ?? 100;
   const fittedSize = fitFontSize(
     ctx,
     displayText,
@@ -184,7 +185,8 @@ export function renderTextLayer(
     layer.fontSize,
     layer.lineHeight,
     layer.letterSpacing,
-    fontWeight
+    fontWeight,
+    fontWidth
   );
 
   const fontStr = buildFontString(layer.fontStyle, fittedSize, layer.fontFamily, fontWeight);
@@ -254,6 +256,15 @@ export function renderTextLayer(
   ctx.beginPath();
   ctx.rect(layer.x, layer.y, layer.width, layer.height);
   ctx.clip();
+
+  // Масштабирование по X для симуляции font-stretch (ширины шрифта)
+  const fontScaleX = fontWidth / 100;
+  if (fontScaleX !== 1) {
+    ctx.save();
+    ctx.translate(layer.x, 0);
+    ctx.scale(fontScaleX, 1);
+    ctx.translate(-layer.x, 0);
+  }
 
   for (const line of lines) {
     let lineX = Math.round(layer.x + padding);
@@ -352,6 +363,11 @@ export function renderTextLayer(
     startY += lineHeightVal;
   }
 
+  // Восстанавливаем масштаб, если применяли font-stretch
+  if (fontScaleX !== 1) {
+    ctx.restore();
+  }
+
   ctx.restore();
 }
 
@@ -438,7 +454,12 @@ export function hitTestLayer(
 // ============================================================
 
 /** Собирает строку шрифта для Canvas API */
-export function buildFontString(fontStyle: string, fontSize: number, fontFamily: string, fontWeight: number = 400): string {
+export function buildFontString(
+  fontStyle: string,
+  fontSize: number,
+  fontFamily: string,
+  fontWeight: number = 400
+): string {
   let s = '';
   if (fontStyle.includes('italic')) s += 'italic ';
   // Используем числовой вес если он отличается от дефолтного 400
@@ -557,7 +578,8 @@ export function fitFontSize(
   requestedSize: number,
   lineHeightMultiplier: number = 1.3,
   letterSpacing: number = 0,
-  fontWeight: number = 400
+  fontWeight: number = 400,
+  fontWidth: number = 100
 ): number {
   const MIN_SIZE = 6;
   const padding = 8;
@@ -568,16 +590,22 @@ export function fitFontSize(
   let hi = Math.min(requestedSize, layerHeight);
   let bestSize = MIN_SIZE;
 
+  const fontScaleX = fontWidth / 100;
+
   while (lo <= hi) {
     const mid = Math.floor((lo + hi) / 2);
     ctx.font = buildFontString(fontStyle, mid, fontFamily, fontWeight);
     const lines = wrapWords(ctx, text, availW, letterSpacing);
     const totalH = lines.length * mid * lineHeightMultiplier;
     const maxW = lines.reduce((max, l) => {
+      let w: number;
       if (letterSpacing > 0) {
-        return Math.max(max, measureTextWithSpacing(ctx, l, letterSpacing));
+        w = measureTextWithSpacing(ctx, l, letterSpacing);
+      } else {
+        w = ctx.measureText(l).width;
       }
-      return Math.max(max, ctx.measureText(l).width);
+      // Учитываем масштабирование font-stretch
+      return Math.max(max, w * fontScaleX);
     }, 0);
 
     if (maxW <= availW && totalH <= availH) {
